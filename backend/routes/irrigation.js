@@ -378,7 +378,7 @@ router.get('/stats', async (req, res) => {
     const farmer_id = req.query.farmer_id || 1;
 
     const totalUsageRes = await query(
-      'SELECT SUM(water_used_litres) as total_consumed FROM irrigation_records WHERE farmer_id = ? AND status = "completed"',
+      `SELECT SUM(water_used_litres) as total_consumed FROM irrigation_records WHERE farmer_id = ? AND status = 'completed'`,
       [farmer_id]
     );
 
@@ -388,7 +388,7 @@ router.get('/stats', async (req, res) => {
     );
 
     const countRes = await query(
-      'SELECT COUNT(*) as total_events FROM irrigation_records WHERE farmer_id = ? AND status = "completed"',
+      `SELECT COUNT(*) as total_events FROM irrigation_records WHERE farmer_id = ? AND status = 'completed'`,
       [farmer_id]
     );
 

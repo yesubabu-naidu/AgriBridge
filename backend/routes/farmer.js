@@ -10,11 +10,11 @@ router.get('/dashboard', authenticateToken, authorizeRoles('farmer'), async (req
   try {
     const farmerId = req.user.id;
 
-    const leases = await query('SELECT COUNT(*) AS total_leases FROM leases WHERE farmer_id = ? AND status = "active"', [farmerId]);
-    const pendingApps = await query('SELECT COUNT(*) AS pending FROM lease_applications WHERE farmer_id = ? AND status = "pending"', [farmerId]);
-    const approvedApps = await query('SELECT COUNT(*) AS approved FROM lease_applications WHERE farmer_id = ? AND status = "approved"', [farmerId]);
-    const spending = await query('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE payer_id = ? AND status = "successful"', [farmerId]);
-    const earnings = await query('SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = ? AND type = "payout" AND status = "successful"', [farmerId]);
+    const leases = await query(`SELECT COUNT(*) AS total_leases FROM leases WHERE farmer_id = ? AND status = 'active'`, [farmerId]);
+    const pendingApps = await query(`SELECT COUNT(*) AS pending FROM lease_applications WHERE farmer_id = ? AND status = 'pending'`, [farmerId]);
+    const approvedApps = await query(`SELECT COUNT(*) AS approved FROM lease_applications WHERE farmer_id = ? AND status = 'approved'`, [farmerId]);
+    const spending = await query(`SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE payer_id = ? AND status = 'successful'`, [farmerId]);
+    const earnings = await query(`SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = ? AND type = 'payout' AND status = 'successful'`, [farmerId]);
     const recentTx = await query('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 5', [farmerId]);
 
     return res.json({
@@ -37,7 +37,7 @@ router.get('/dashboard', authenticateToken, authorizeRoles('farmer'), async (req
 router.get('/leases', authenticateToken, authorizeRoles('farmer'), async (req, res) => {
   try {
     const leases = await query(
-      `SELECT les.*, l.land_type AS land_name, l.location, l.area_acres AS acres, COALESCE(NULLIF(u.name, ""), u.full_name) AS owner_name, u.phone AS owner_phone
+      `SELECT les.*, l.land_type AS land_name, l.location, l.area_acres AS acres, COALESCE(NULLIF(u.name, ''), u.full_name) AS owner_name, u.phone AS owner_phone
        FROM leases les
        JOIN lands l ON les.land_id = l.id
        JOIN users u ON les.owner_id = u.id
@@ -90,7 +90,7 @@ router.post("/leases/apply", authenticateToken, authorizeRoles("farmer"), async 
 router.get('/applications', authenticateToken, authorizeRoles('farmer'), async (req, res) => {
   try {
     const apps = await query(
-      `SELECT app.*, l.land_type AS land_name, l.location, l.price_per_year AS lease_price, COALESCE(NULLIF(u.name, ""), u.full_name) AS owner_name
+      `SELECT app.*, l.land_type AS land_name, l.location, l.price_per_year AS lease_price, COALESCE(NULLIF(u.name, ''), u.full_name) AS owner_name
        FROM lease_applications app
        JOIN lands l ON app.land_id = l.id
        JOIN users u ON l.landowner_id = u.id
@@ -108,7 +108,7 @@ router.get('/applications', authenticateToken, authorizeRoles('farmer'), async (
 router.get('/products', authenticateToken, authorizeRoles('farmer'), async (req, res) => {
   try {
     const products = await query(
-      `SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.name, ""), u.full_name) AS farmer_name, u.email AS farmer_email, u.phone AS farmer_phone
+      `SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.name, ''), u.full_name) AS farmer_name, u.email AS farmer_email, u.phone AS farmer_phone
        FROM products p
        JOIN users u ON p.farmer_id = u.id
        WHERE p.farmer_id = ?

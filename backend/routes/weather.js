@@ -95,11 +95,15 @@ router.post('/location', async (req, res) => {
     } = req.body;
 
     await query(
-      `INSERT INTO farmer_agricultural_context 
-       (farmer_id, location, district, state) 
+      `INSERT INTO farmer_agricultural_context
+       (farmer_id, location, district, state)
        VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE location = ?, district = ?, state = ?`,
-      [farmer_id, location, district, state, location, district, state]
+       ON CONFLICT (farmer_id)
+       DO UPDATE SET
+         location = EXCLUDED.location,
+         district = EXCLUDED.district,
+         state = EXCLUDED.state`,
+      [farmer_id, location, district, state]
     );
 
     res.json({

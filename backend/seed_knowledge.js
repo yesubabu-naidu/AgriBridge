@@ -139,10 +139,11 @@ async function seed() {
 
   // Also seed farmer agricultural context for farmer_id = 1 if missing
   await query(
-    `INSERT INTO farmer_agricultural_context 
+    `INSERT INTO farmer_agricultural_context
      (farmer_id, location, district, state, country, primary_crops, soil_type, irrigation_method, season)
      VALUES (1, 'Ongole', 'Prakasam', 'Andhra Pradesh', 'India', 'Paddy, Tomato, Chilli, Cotton', 'Loamy', 'Drip', 'Kharif')
-     ON DUPLICATE KEY UPDATE location = 'Ongole'`
+     ON CONFLICT (farmer_id)
+     DO UPDATE SET location = EXCLUDED.location`
   );
 
   console.log('✅ Agricultural Knowledge Base & Context seeded successfully!');

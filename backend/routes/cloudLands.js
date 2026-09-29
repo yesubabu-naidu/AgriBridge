@@ -79,7 +79,22 @@ router.post('/', authenticateToken, authorizeRoles('landowner', 'admin'), upload
     const input = normalizeLandInput(req.body);
     const imageUrl = String(req.body.image_url || '').trim();
     if (imageUrl && !/^https:\/\//i.test(imageUrl)) return res.status(400).json({ success: false, message: 'Use a file upload or a valid HTTPS image URL.' });
-    const result = await query('INSERT INTO lands (landowner_id, location, land_type, area_acres, price_per_year, description, image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [req.user.id, input.location, input.land_type, input.area_acres, input.price_per_year, input.description || null, imageUrl || null, 'active']);
+   const result = await query(
+  `INSERT INTO lands
+   (landowner_id, land_type, location, district, state, area_acres, soil_type, water_source, price_per_year)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [
+    req.user.id,
+    input.land_type,
+    input.location,
+    req.body.district || '',
+    req.body.state || '',
+    input.area_acres,
+    req.body.soil_type || '',
+    req.body.water_source || '',
+    input.price_per_year
+  ]
+);
     const landId = result.insertId;
     if (req.file) {
       validateUpload(req.file);

@@ -7,8 +7,12 @@ import { deleteObject, makePublicId, uploadBuffer, validateUpload } from '../ser
 const router = express.Router();
 
 async function getAvatarColumn() {
-  const columns = await query('SHOW COLUMNS FROM users');
-  const names = new Set(columns.map((column) => column.Field));
+  const columns = await query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'users'
+  `);
+  const names = new Set(columns.map((column) => column.column_name));
   if (names.has('avatar_url')) return 'avatar_url';
   if (names.has('avatar')) return 'avatar';
   throw new Error('The users table must contain avatar or avatar_url.');
