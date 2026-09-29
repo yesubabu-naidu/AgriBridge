@@ -35,7 +35,7 @@ export default function LandDetails({ user }) {
       return;
     }
     setSubmitting(true);
-    await api.applyForLease({
+    const result = await api.applyForLease({
       land_id: land.id,
       land_name: land.land_name,
       location: land.location,
@@ -46,6 +46,10 @@ export default function LandDetails({ user }) {
       message
     });
     setSubmitting(false);
+    if (!result.success) {
+      alert(result.message || "Unable to submit the lease application.");
+      return;
+    }
     setShowApplyModal(false);
     setSuccessAlert(true);
   };

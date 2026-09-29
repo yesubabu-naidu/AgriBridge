@@ -35,7 +35,6 @@ import FarmerPayment from './pages/farmer/FarmerPayment';
 import FarmerTransactions from './pages/farmer/FarmerTransactions';
 import FarmerApplications from './pages/farmer/FarmerApplications';
 import SmartIrrigation from './pages/farmer/SmartIrrigation';
-import AIWeatherForecast from './pages/farmer/AIWeatherForecast';
 import AgriAIChatbot from './components/AgriAIChatbot';
 
 // Buyer Pages
@@ -104,7 +103,6 @@ export default function App() {
       case 'farmer':
         return [
           ['/farmer/dashboard', 'Dashboard', 'bi-speedometer2'],
-          ['/farmer/weather', 'AI Weather Forecast', 'bi-cloud-sun'],
           ['/farmer/irrigation', 'Smart Irrigation', 'bi-droplet-half'],
           ['/farmer/my-crops', 'My Crop Produce', 'bi-shop'],
           ['/farmer/add-crop', 'Add Crop Produce', 'bi-plus-square'],
@@ -193,7 +191,6 @@ export default function App() {
 
                 {/* Farmer Routes */}
                 <Route path="/farmer/dashboard" element={<FarmerDashboard />} />
-                <Route path="/farmer/weather" element={<AIWeatherForecast user={user} />} />
                 <Route path="/farmer/irrigation" element={<SmartIrrigation />} />
                 <Route path="/farmer/my-crops" element={<MyCrops />} />
                 <Route path="/farmer/add-crop" element={<AddCrop />} />

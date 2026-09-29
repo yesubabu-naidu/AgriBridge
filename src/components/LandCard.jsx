@@ -8,7 +8,7 @@ export default function LandCard({ land, onWishlist }) {
   return (
     <div className="land-card">
       <div className="position-relative">
-        <img src={image} alt={land.land_name} />
+        <img src={image} alt={land.land_name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800"; }} />
         <span className="position-absolute top-0 start-0 m-3 badge bg-white text-dark shadow-sm rounded-pill fw-bold px-3 py-2">
           <i className="bi bi-patch-check-fill text-success me-1"></i> Verified
         </span>

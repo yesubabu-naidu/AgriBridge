@@ -2,61 +2,68 @@ import React, { useState } from 'react';
 import { api } from '../services/api';
 
 export default function ProfileSettings({ user, onUpdateProfile }) {
-  if (!user) {
-    return <div className="container py-5 text-center"><p>Please login to access profile settings.</p></div>;
-  }
+  const role = user?.role || 'farmer';
 
-  const role = user.role || 'farmer';
-
-  const [fullName, setFullName] = useState(user.full_name || '');
-  const [email, setEmail] = useState(user.email || '');
-  const [phone, setPhone] = useState(user.phone || '+91 98765 43210');
-  const [location, setLocation] = useState(user.location || 'Ongole, Andhra Pradesh');
-  const [avatar, setAvatar] = useState(user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300');
-  const [idProofImg, setIdProofImg] = useState(user.id_proof_img || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600');
+  const [fullName, setFullName] = useState(user?.full_name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '+91 98765 43210');
+  const [location, setLocation] = useState(user?.location || 'Ongole, Andhra Pradesh');
+  const [avatar, setAvatar] = useState(user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300');
+  const [idProofImg, setIdProofImg] = useState(user?.id_proof_img || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600');
 
   // Role specific fields
-  const [farmSize, setFarmSize] = useState(user.farm_size || '5.5 Acres');
-  const [primaryCrops, setPrimaryCrops] = useState(user.primary_crops || 'Rice, Cotton, Chilli');
-  const [companyName, setCompanyName] = useState(user.company_name || 'AgriTrade Enterprises');
-  const [shippingAddress, setShippingAddress] = useState(user.shipping_address || 'Plot 42, Industrial Area, Vijayawada');
+  const [farmSize, setFarmSize] = useState(user?.farm_size || '5.5 Acres');
+  const [primaryCrops, setPrimaryCrops] = useState(user?.primary_crops || 'Rice, Cotton, Chilli');
+  const [companyName, setCompanyName] = useState(user?.company_name || 'AgriTrade Enterprises');
+  const [shippingAddress, setShippingAddress] = useState(user?.shipping_address || 'Plot 42, Industrial Area, Vijayawada');
 
   const [saving, setSaving] = useState(false);
   const [successAlert, setSuccessAlert] = useState(false);
 
-  // File Upload Handlers with FileReader
-  const handleAvatarFileUpload = (e) => {
+  if (!user) {
+    return <div className="container py-5 text-center"><p>Please login to access profile settings.</p></div>;
+  }
+
+  const handleAvatarFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatar(reader.result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      window.alert("Please choose an image up to 10 MB.");
+      return;
+    }
+    setAvatar(URL.createObjectURL(file));
+    const response = await api.uploadAvatar(file);
+    if (response?.data?.avatar) {
+      setAvatar(response.data.avatar);
+      if (onUpdateProfile) onUpdateProfile({ ...user, avatar: response.data.avatar });
+    } else if (!response?.isMock) {
+      window.alert(response?.message || "Avatar upload failed.");
     }
   };
 
-  const handleIdProofFileUpload = (e) => {
+  const handleIdProofFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setIdProofImg(reader.result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (!(file.type.startsWith("image/") || file.type === "application/pdf") || file.size > 10 * 1024 * 1024) {
+      window.alert("Please choose a JPG, PNG, WebP, GIF, or PDF up to 10 MB.");
+      return;
     }
+    setIdProofImg(URL.createObjectURL(file));
+    const response = await api.uploadIdProof(file);
+    if (response?.data?.id_proof_img) setIdProofImg(response.data.id_proof_img);
+    else if (!response?.isMock) window.alert(response?.message || "Identity document upload failed.");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
 
     const updatedUser = {
       ...user,
-      full_name: fullName,
-      email,
-      phone,
-      location,
+      full_name: fullName.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
+      location: location.trim(),
       avatar,
       id_proof_img: idProofImg,
       farm_size: farmSize,
@@ -65,17 +72,18 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
       shipping_address: shippingAddress
     };
 
-    localStorage.setItem('agribridge_user', JSON.stringify(updatedUser));
-
-    if (onUpdateProfile) {
-      onUpdateProfile(updatedUser);
-    }
-
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      const response = await api.updateProfile(updatedUser);
+      const persistedUser = response?.data?.user || updatedUser;
+      localStorage.setItem("agribridge_user", JSON.stringify(persistedUser));
+      if (onUpdateProfile) onUpdateProfile(persistedUser);
       setSuccessAlert(true);
-      setTimeout(() => setSuccessAlert(false), 4000);
-    }, 600);
+      window.setTimeout(() => setSuccessAlert(false), 4000);
+    } catch (error) {
+      window.alert(error.message || "Unable to save profile settings.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -138,7 +146,7 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
               </div>
 
               {/* Identity Verification Image (Featured for Farmers & Landowners) */}
-              {(role === 'farmer' || role === 'landowner') && (
+              {role === 'landowner' && (
                 <div className="col-md-6 border-start ps-md-4">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div>

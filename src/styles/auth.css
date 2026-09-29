@@ -1,0 +1,23 @@
+.auth-page { min-height: calc(100vh - 180px); display: grid; place-items: center; background: var(--background); }
+.auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-container); box-shadow: var(--shadow-lg); overflow: hidden; padding: clamp(1.5rem, 5vw, 2.5rem); }
+.auth-card__brand { display: flex; align-items: center; gap: .75rem; margin-bottom: 2rem; color: var(--primary-dark); }
+.auth-card__brand strong { display: block; font: 800 1.35rem/1 var(--font-heading); letter-spacing: -.04em; }
+.auth-card__brand small { display: block; margin-top: .35rem; color: var(--muted); font-size: .75rem; }
+.auth-card__mark { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: .85rem; background: var(--primary-light); font-size: 1.3rem; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); margin-bottom: 1.75rem; }
+.auth-tabs button, .auth-link, .auth-back { border: 0; background: transparent; color: var(--muted); font-weight: 700; padding: .65rem .25rem; }
+.auth-tabs button.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+.auth-form h1 { color: var(--text); font: 800 clamp(1.45rem, 3vw, 1.8rem)/1.15 var(--font-heading); letter-spacing: -.04em; margin: 0 0 .45rem; }
+.auth-form > p { color: var(--muted); font-size: .9rem; line-height: 1.55; margin-bottom: 1.5rem; }
+.auth-field { margin-bottom: 1rem; }
+.auth-field label { color: var(--text); display: block; font-size: .86rem; font-weight: 700; margin-bottom: .4rem; }
+.auth-field .input-group .form-control { border-radius: var(--radius-sm) 0 0 var(--radius-sm) !important; }
+.auth-field .input-group .btn { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding-inline: .8rem; }
+.auth-form > .btn-success { min-height: 2.9rem; margin-top: .5rem; }
+.auth-link { display: block; margin: -.25rem 0 1rem auto; padding: 0; color: var(--primary); font-size: .85rem; }
+.auth-back { padding: 0; margin: 0 0 1.25rem; color: var(--primary); font-size: .85rem; }
+.auth-role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-bottom: 1rem; }
+.auth-role-grid button { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--muted); font-size: .82rem; font-weight: 700; padding: .65rem .25rem; }
+.auth-role-grid button.selected { border-color: var(--primary); background: var(--primary-light); color: var(--primary-dark); }
+.auth-card .alert { border-radius: var(--radius-sm); border: 0; font-size: .85rem; }
+@media (max-width: 575px) { .auth-page { padding-inline: .25rem; } .auth-card { border-radius: var(--radius-card); } }

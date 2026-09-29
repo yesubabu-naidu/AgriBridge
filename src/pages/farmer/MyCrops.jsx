@@ -9,8 +9,17 @@ export default function MyCrops() {
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
 
-  const savedUser = localStorage.getItem('agribridge_user');
-  const user = savedUser ? JSON.parse(savedUser) : null;
+  const user = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem('agribridge_user') || 'null'
+      );
+    } catch {
+      return null;
+    }
+  })();
+
+  const userEmail = String(user?.email || '').toLowerCase();
 
   useEffect(() => {
     loadCrops();
@@ -18,18 +27,22 @@ export default function MyCrops() {
 
   const loadCrops = async () => {
     setLoading(true);
-    const allProducts = await api.getProducts();
+
+    const allProducts = await api.getMyProducts();
 
     if (user) {
-      const myCropsList = allProducts.filter(p => 
-        (p.farmer_email && p.farmer_email.toLowerCase() === user.email.toLowerCase()) ||
-        (p.created_by && p.created_by.toLowerCase() === user.email.toLowerCase()) ||
-        (p.farmer_name && user.full_name && p.farmer_name.toLowerCase() === user.full_name.toLowerCase()) ||
-        String(p.farmer_id) === String(user.id)
+      const myCropsList = allProducts.filter(
+        (p) =>
+          String(p.farmer_id) === String(user.id) ||
+          (p.farmer_email &&
+            p.farmer_email.toLowerCase() === userEmail) ||
+          (p.created_by &&
+            p.created_by.toLowerCase() === userEmail)
       );
-      setCrops(myCropsList.length > 0 ? myCropsList : allProducts);
+
+      setCrops(myCropsList);
     } else {
-      setCrops(allProducts);
+      setCrops([]);
     }
 
     setLoading(false);
@@ -37,9 +50,8 @@ export default function MyCrops() {
 
   const handleDelete = async () => {
     if (deleteId) {
-      let savedProducts = JSON.parse(localStorage.getItem('agribridge_products') || '[]');
-      savedProducts = savedProducts.filter(p => String(p.id) !== String(deleteId));
-      localStorage.setItem('agribridge_products', JSON.stringify(savedProducts));
+      await api.deleteProduct(deleteId);
+
       setDeleteId(null);
       loadCrops();
     }
@@ -49,17 +61,32 @@ export default function MyCrops() {
     <div className="my-crops-page">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <span className="eyebrow">HARVEST INVENTORY</span>
-          <h2 className="fw-black mb-1">My Crop Produce</h2>
-          <p className="text-muted small">Manage your listed produce items for commercial buyers.</p>
+          <span className="eyebrow">
+            HARVEST INVENTORY
+          </span>
+
+          <h2 className="fw-black mb-1">
+            My Crop Produce
+          </h2>
+
+          <p className="text-muted small">
+            Manage your listed produce items for commercial buyers.
+          </p>
         </div>
-        <Link to="/farmer/add-crop" className="btn btn-success">
-          <i className="bi bi-plus-lg me-1"></i> Add Crop Produce
+
+        <Link
+          to="/farmer/add-crop"
+          className="btn btn-success"
+        >
+          <i className="bi bi-plus-lg me-1"></i>
+          Add Crop Produce
         </Link>
       </div>
 
       {loading ? (
-        <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
+        <div className="text-center py-5">
+          <div className="spinner-border text-success"></div>
+        </div>
       ) : crops.length === 0 ? (
         <EmptyState
           icon="bi-shop"
@@ -82,30 +109,58 @@ export default function MyCrops() {
                   <th>Actions</th>
                 </tr>
               </thead>
+
               <tbody>
-                {crops.map(crop => (
+                {crops.map((crop) => (
                   <tr key={crop.id}>
                     <td>
                       <div className="d-flex align-items-center gap-3">
-                        <img 
-                          src={crop.image_url || 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800'} 
-                          alt="" 
-                          className="rounded-3" 
-                          style={{ width: '50px', height: '40px', objectFit: 'cover' }} 
+                        <img
+                          src={
+                            crop.image_url ||
+                            'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800'
+                          }
+                          alt=""
+                          className="rounded-3"
+                          style={{
+                            width: '50px',
+                            height: '40px',
+                            objectFit: 'cover'
+                          }}
                         />
-                        <span className="fw-bold">{crop.product_name}</span>
+
+                        <span className="fw-bold">
+                          {crop.product_name}
+                        </span>
                       </div>
                     </td>
-                    <td><span className="badge bg-success-subtle text-success">{crop.category}</span></td>
-                    <td className="fw-bold">{crop.quantity} {crop.unit}</td>
-                    <td className="fw-bold text-success">₹{crop.price_per_unit} / {crop.unit}</td>
-                    <td className="small text-muted">{crop.location}</td>
+
                     <td>
-                      <button 
+                      <span className="badge bg-success-subtle text-success">
+                        {crop.category}
+                      </span>
+                    </td>
+
+                    <td className="fw-bold">
+                      {crop.available_qty ?? crop.quantity ?? 0}{' '}
+                      {crop.unit}
+                    </td>
+
+                    <td className="fw-bold text-success">
+                      ₹{crop.price_per_unit} / {crop.unit}
+                    </td>
+
+                    <td className="small text-muted">
+                      {crop.location}
+                    </td>
+
+                    <td>
+                      <button
                         className="btn btn-sm btn-outline-danger"
                         onClick={() => setDeleteId(crop.id)}
                       >
-                        <i className="bi bi-trash me-1"></i> Remove
+                        <i className="bi bi-trash me-1"></i>
+                        Remove
                       </button>
                     </td>
                   </tr>
@@ -124,7 +179,10 @@ export default function MyCrops() {
         confirmText="Remove Crop"
         confirmVariant="danger"
       >
-        <p className="mb-0">Are you sure you want to remove this crop listing from the produce store?</p>
+        <p className="mb-0">
+          Are you sure you want to remove this crop listing from the
+          produce store?
+        </p>
       </Modal>
     </div>
   );

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function ProductCard({ product, onAddToCart }) {
   const navigate = useNavigate();
+  const fallbackImage = "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800";
 
   const handleAddToCartClick = () => {
     const savedUser = localStorage.getItem('agribridge_user');
@@ -15,22 +16,21 @@ export default function ProductCard({ product, onAddToCart }) {
     }
   };
 
-  const handleBuyNowClick = () => {
-    const savedUser = localStorage.getItem('agribridge_user');
+  const handleBuyNowClick = async () => {
+    const savedUser = localStorage.getItem("agribridge_user");
     if (!savedUser) {
-      navigate('/auth?mode=login');
-    } else {
-      if (onAddToCart) {
-        onAddToCart(product);
-      }
-      navigate('/buyer/checkout');
+      navigate("/auth?mode=login");
+      return;
     }
+    const result = onAddToCart ? await onAddToCart(product) : { success: true };
+    if (result?.success === false) return;
+    navigate("/buyer/checkout");
   };
 
   return (
     <div className="product-card">
       <div className="position-relative">
-        <img src={product.image_url} alt={product.product_name} />
+        <img src={product.image_url || fallbackImage} alt={product.product_name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = fallbackImage; }} />
         <span className="position-absolute top-0 start-0 m-3 badge bg-success text-white shadow-sm rounded-pill fw-bold px-3 py-1">
           {product.category}
         </span>

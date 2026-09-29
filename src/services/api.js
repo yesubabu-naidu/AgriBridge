@@ -8,7 +8,7 @@ import {
   initialUsers
 } from '../data.js';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Helper for persistent local storage synced stores
 function getStoredItem(key, defaultValue) {
@@ -43,14 +43,66 @@ let transactionsStore = getStoredItem('agribridge_transactions', []);
 let ordersStore = getStoredItem('agribridge_orders', []);
 let cartStore = getStoredItem('agribridge_cart', []);
 
+// Remove simulated browser-only lease credits. Server data is the source of truth.
+const retainedTransactions = transactionsStore.filter((transaction) => !(
+  transaction?.direction === 'credit' &&
+  /-CR\d*$/.test(String(transaction.transaction_id || '')) &&
+  /^Lease payment received for lease #/i.test(String(transaction.description || ''))
+));
+if (retainedTransactions.length !== transactionsStore.length) {
+  transactionsStore = retainedTransactions;
+  setStoredItem('agribridge_transactions', transactionsStore);
+}
 
+// Remove the two specifically requested temporary transaction records.
+const removedTransactionIds = new Set(['AGRI1789624729053-CR1', 'AGRI1789620218127']);
+const retainedRequestedTransactions = transactionsStore.filter((transaction) => !removedTransactionIds.has(String(transaction?.transaction_id || '')));
+if (retainedRequestedTransactions.length !== transactionsStore.length) {
+  transactionsStore = retainedRequestedTransactions;
+  setStoredItem('agribridge_transactions', transactionsStore);
+}
+
+// Remove the specifically requested stale local crop listing. It is not present in MySQL.
+const retainedProducts = productsStore.filter((product) => !(
+  String(product?.product_name || "").trim().toLowerCase() === "paddy" &&
+  Number(product?.price_per_unit) === 24 &&
+  String(product?.unit || "").trim().toLowerCase() === "kg" &&
+  String(product?.location || "").trim().toLowerCase() === "ongole, andhra pradesh"
+));
+if (retainedProducts.length !== productsStore.length) {
+  productsStore = retainedProducts;
+  setStoredItem("agribridge_products", productsStore);
+}
+
+// Remove the specifically requested stale local land listing. It is not in MySQL.
+const retainedLands = landsStore.filter((land) => !(
+  String(land?.location || "").trim().toLowerCase() === "ongole, andhra pradesh" &&
+  String(land?.land_type ?? land?.land_name ?? "").trim().toLowerCase() === "paddy farm" &&
+  Number(land?.area_acres ?? land?.acres) === 5.9 &&
+  Number(land?.price_per_year ?? land?.lease_price) === 30000
+));
+if (retainedLands.length !== landsStore.length) {
+  landsStore = retainedLands;
+  setStoredItem("agribridge_lands", landsStore);
+}
+
+function getCurrentUser() {
+  try { return JSON.parse(localStorage.getItem('agribridge_user') || 'null'); } catch { return null; }
+}
+
+function belongsToUser(record, user, idField, emailFields = []) {
+  if (!user) return false;
+  if (record[idField] != null && String(record[idField]) === String(user.id)) return true;
+  const email = String(user.email || "").toLowerCase().trim();
+  return emailFields.some(field => String(record[field] || "").toLowerCase().trim() === email);
+}
 
 // Helper to handle API fetch with fallback to stateful storage
 async function fetchWithFallback(endpoint, options = {}, fallbackData = null) {
   try {
     const token = localStorage.getItem('agribridge_token');
     const headers = {
-      'Content-Type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     };
@@ -67,14 +119,22 @@ async function fetchWithFallback(endpoint, options = {}, fallbackData = null) {
 
     clearTimeout(timeoutId);
 
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    }
-    throw new Error(`API response error: ${response.status}`);
+    if (response.ok) return await response.json();
+    const errorData = await response.json().catch(() => ({}));
+    return { success: false, message: errorData.message || "Request failed." };
   } catch (err) {
     return { success: true, data: fallbackData, isMock: true };
   }
+}
+
+function buildFileFormData(data, fileField = "file") {
+  const formData = new FormData();
+  Object.entries(data || {}).forEach(([key, value]) => {
+    if (key === fileField || value === undefined || value === null) return;
+    formData.append(key, String(value));
+  });
+  if (data?.[fileField]) formData.append(fileField, data[fileField]);
+  return formData;
 }
 
 export const api = {
@@ -126,7 +186,7 @@ export const api = {
     }
 
     const newUser = {
-      id: Date.now(),
+        id: Date.now(),
       full_name,
       email: cleanEmail,
       password,
@@ -156,6 +216,32 @@ export const api = {
 
     localStorage.setItem('agribridge_token', `token_${Date.now()}`);
     return { success: true, user: userData };
+  },
+
+  async sendRegistrationVerification(email) {
+    try {
+      const response = await fetch(API_BASE_URL + "/auth/send-registration-otp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: (email || "").trim() }) });
+      return await response.json();
+    } catch {
+      return { success: false, message: "Unable to send the verification code. Please try again when the server is available." };
+    }
+  },
+
+  async verifyRegistrationAndRegister(payload) {
+    try {
+      const response = await fetch(API_BASE_URL + "/auth/verify-registration", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const result = await response.json();
+      if (!result.success || !result.data?.user) return result;
+      usersStore = getStoredItem("agribridge_users", []);
+      const user = { ...result.data.user, password: payload.password, email_verified: true };
+      const index = usersStore.findIndex(item => item.email.toLowerCase() === user.email.toLowerCase());
+      if (index >= 0) usersStore[index] = { ...usersStore[index], ...user }; else usersStore.push(user);
+      setStoredItem("agribridge_users", usersStore);
+      localStorage.setItem("agribridge_token", result.data.token);
+      return { success: true, user: result.data.user, message: result.message };
+    } catch {
+      return { success: false, message: "Unable to verify the email. Please try again when the server is available." };
+    }
   },
 
   // GOOGLE OAUTH LOGIN / REGISTER
@@ -260,19 +346,44 @@ export const api = {
     return { success: true, message: 'Password reset successful! You can now log in.' };
   },
 
+  async uploadAvatar(file) {
+    const response = await fetchWithFallback("/profile/avatar", { method: "PUT", body: buildFileFormData({ file }) }, null);
+    if (response?.data?.avatar) {
+      const current = getCurrentUser();
+      localStorage.setItem("agribridge_user", JSON.stringify({ ...current, avatar: response.data.avatar }));
+    }
+    return response;
+  },
+
+  async updateProfile(profileData) {
+    const current = getCurrentUser();
+    const updatedUser = { ...current, ...profileData };
+    const response = await fetchWithFallback("/profile", {
+      method: "PUT",
+      body: JSON.stringify(profileData)
+    }, updatedUser);
+    const savedUser = response?.data?.user || updatedUser;
+    localStorage.setItem("agribridge_user", JSON.stringify(savedUser));
+    usersStore = getStoredItem("agribridge_users", []);
+    const index = usersStore.findIndex(item => String(item.id) === String(savedUser.id));
+    if (index >= 0) {
+      usersStore[index] = { ...usersStore[index], ...savedUser };
+      setStoredItem("agribridge_users", usersStore);
+    }
+    return { ...response, data: { ...(response.data || {}), user: savedUser } };
+  },
+
+  async uploadIdProof(file) {
+    return fetchWithFallback("/profile/id-proof", { method: "PUT", body: buildFileFormData({ file }) }, null);
+  },
+
   // LANDS
   async getLands(filters = {}) {
     landsStore = getStoredItem('agribridge_lands', []);
     const res = await fetchWithFallback('/lands', { method: 'GET' }, landsStore);
 
-    let result = [];
-    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-      const serverIds = new Set(res.data.map(d => String(d.id)));
-      const extraLocal = landsStore.filter(l => !serverIds.has(String(l.id)));
-      result = [...res.data, ...extraLocal];
-    } else {
-      result = landsStore;
-    }
+    // A reachable API is the source of truth; cached records may not exist in the database.
+    let result = res.isMock ? landsStore : (Array.isArray(res.data) ? res.data : []);
 
     if (filters.search) {
       const s = filters.search.toLowerCase();
@@ -288,109 +399,68 @@ export const api = {
     return result;
   },
 
+  async getMyLands() {
+    landsStore = getStoredItem("agribridge_lands", []);
+    const user = getCurrentUser();
+    const ownedLocally = landsStore.filter(land => belongsToUser(land, user, "landowner_id", ["owner_email", "created_by"]) || belongsToUser(land, user, "owner_id", ["owner_email", "created_by"]));
+    const res = await fetchWithFallback("/lands/mine", { method: "GET" }, ownedLocally);
+    return res.isMock ? ownedLocally : (Array.isArray(res.data) ? res.data : []);
+  },
+
   async getLandById(id) {
     landsStore = getStoredItem('agribridge_lands', []);
     const found = landsStore.find(l => String(l.id) === String(id)) || null;
     const res = await fetchWithFallback(`/lands/${id}`, { method: 'GET' }, found);
-    return res.data || found;
+    return res.isMock ? found : (res.data || null);
   },
 
   async createLand(landData) {
-    landsStore = getStoredItem('agribridge_lands', []);
-    const newLand = {
-      id: Date.now(),
-      status: 'approved',
-      rating: 5.0,
-      images: [landData.image_url || 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800'],
-      created_at: new Date().toISOString().split('T')[0],
-      ...landData
-    };
-    landsStore.unshift(newLand);
-    setStoredItem('agribridge_lands', landsStore);
-    await fetchWithFallback('/lands', { method: 'POST', body: JSON.stringify(landData) }, newLand);
-    return newLand;
+    const { file, ...fields } = landData || {};
+    const body = file ? buildFileFormData(landData) : JSON.stringify(fields);
+    return fetchWithFallback("/lands", { method: "POST", body }, null);
   },
 
   async updateLand(id, landData) {
-    landsStore = getStoredItem('agribridge_lands', []);
-    const index = landsStore.findIndex(l => String(l.id) === String(id));
-    if (index !== -1) {
-      landsStore[index] = { ...landsStore[index], ...landData };
-      setStoredItem('agribridge_lands', landsStore);
-    }
-    await fetchWithFallback(`/lands/${id}`, { method: 'PUT', body: JSON.stringify(landData) }, landsStore[index]);
-    return true;
+    const { file, ...fields } = landData || {};
+    const body = file ? buildFileFormData(landData) : JSON.stringify(fields);
+    return fetchWithFallback("/lands/" + id, { method: "PUT", body }, null);
   },
 
   async deleteLand(id) {
-    landsStore = getStoredItem('agribridge_lands', []);
-    landsStore = landsStore.filter(l => String(l.id) !== String(id));
-    setStoredItem('agribridge_lands', landsStore);
-    await fetchWithFallback(`/lands/${id}`, { method: 'DELETE' }, true);
-    return true;
+    return fetchWithFallback("/lands/" + id, { method: "DELETE" }, null);
   },
 
   // LEASES & APPLICATIONS
   async applyForLease(appData) {
-    applicationsStore = getStoredItem('agribridge_applications', []);
-    const newApp = {
-      id: Date.now(),
-      status: 'pending',
-      created_at: new Date().toISOString().split('T')[0],
-      ...appData
-    };
-    applicationsStore.unshift(newApp);
-    setStoredItem('agribridge_applications', applicationsStore);
-    await fetchWithFallback('/farmer/leases/apply', { method: 'POST', body: JSON.stringify(appData) }, newApp);
-    return newApp;
+    return fetchWithFallback("/farmer/leases/apply", { method: "POST", body: JSON.stringify(appData) }, null);
   },
 
   async getFarmerApplications() {
     applicationsStore = getStoredItem('agribridge_applications', []);
-    const res = await fetchWithFallback('/farmer/applications', { method: 'GET' }, applicationsStore);
-    return res.data || applicationsStore;
+    const user = getCurrentUser();
+    const ownedApplications = applicationsStore.filter(app => belongsToUser(app, user, 'farmer_id', ['farmer_email']));
+    const res = await fetchWithFallback('/farmer/applications', { method: 'GET' }, ownedApplications);
+    return res.isMock ? ownedApplications : (Array.isArray(res.data) ? res.data : [])
   },
 
   async getLandownerApplications() {
     applicationsStore = getStoredItem('agribridge_applications', []);
-    const res = await fetchWithFallback('/landowner/applications', { method: 'GET' }, applicationsStore);
-    return res.data || applicationsStore;
+    landsStore = getStoredItem('agribridge_lands', []);
+    const user = getCurrentUser();
+    const myLandIds = landsStore.filter(land => belongsToUser(land, user, 'landowner_id', ['owner_email', 'created_by']) || belongsToUser(land, user, 'owner_id', ['owner_email', 'created_by'])).map(land => String(land.id));
+    const ownedApplications = applicationsStore.filter(app => belongsToUser(app, user, 'owner_id', ['owner_email']) || myLandIds.includes(String(app.land_id)));
+    const res = await fetchWithFallback('/landowner/applications', { method: 'GET' }, ownedApplications);
+    return res.isMock ? ownedApplications : (Array.isArray(res.data) ? res.data : [])
   },
 
   async updateApplicationStatus(id, status) {
-    applicationsStore = getStoredItem('agribridge_applications', []);
-    leasesStore = getStoredItem('agribridge_leases', []);
-    
-    const app = applicationsStore.find(a => String(a.id) === String(id));
-    if (app) {
-      app.status = status;
-      setStoredItem('agribridge_applications', applicationsStore);
-      if (status === 'approved') {
-        const newLease = {
-          id: Date.now(),
-          land_id: app.land_id,
-          land_name: app.land_name || "Agricultural Land",
-          location: app.location || "Andhra Pradesh",
-          owner_name: app.owner_name || "Landowner",
-          farmer_name: app.farmer_name || "Farmer",
-          start_date: new Date().toISOString().split('T')[0],
-          end_date: "2027-08-29",
-          annual_price: app.proposed_price || 40000,
-          payment_status: "pending",
-          status: "active"
-        };
-        leasesStore.unshift(newLease);
-        setStoredItem('agribridge_leases', leasesStore);
-      }
-    }
-    await fetchWithFallback(`/landowner/applications/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }, true);
-    return true;
+    return fetchWithFallback("/landowner/applications/" + id + "/status", { method: "PUT", body: JSON.stringify({ status }) }, null);
   },
 
   async getFarmerLeases() {
     leasesStore = getStoredItem('agribridge_leases', []);
     const res = await fetchWithFallback('/farmer/leases', { method: 'GET' }, leasesStore);
-    return res.data || leasesStore;
+    return res.isMock ? leasesStore : (Array.isArray(res.data) ? res.data : []);
   },
 
   // PRODUCTS & CROPS
@@ -398,14 +468,7 @@ export const api = {
     productsStore = getStoredItem('agribridge_products', []);
     const res = await fetchWithFallback('/buyer/products', { method: 'GET' }, productsStore);
 
-    let result = [];
-    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-      const serverIds = new Set(res.data.map(d => String(d.id)));
-      const extraLocal = productsStore.filter(p => !serverIds.has(String(p.id)));
-      result = [...res.data, ...extraLocal];
-    } else {
-      result = productsStore;
-    }
+    let result = res.isMock ? productsStore : (Array.isArray(res.data) ? res.data : []);
 
     if (filters.category) {
       result = result.filter(p => p.category === filters.category);
@@ -414,57 +477,74 @@ export const api = {
       const s = filters.search.toLowerCase();
       result = result.filter(p => (p.product_name && p.product_name.toLowerCase().includes(s)) || (p.location && p.location.toLowerCase().includes(s)));
     }
-    return result;
+    return result.filter((product) => product.status !== "out_of_stock" && Number(product.available_qty ?? product.quantity ?? 1) > 0);
+  },
+
+  async getMyProducts() {
+    productsStore = getStoredItem("agribridge_products", []);
+    const user = getCurrentUser();
+    const ownedLocally = productsStore.filter(product => belongsToUser(product, user, "farmer_id", ["farmer_email", "created_by"]));
+    const res = await fetchWithFallback("/farmer/my-products", { method: "GET" }, ownedLocally);
+    return res.isMock ? ownedLocally : (Array.isArray(res.data) ? res.data : []);
   },
 
   async createProduct(productData) {
-    productsStore = getStoredItem('agribridge_products', []);
-    const newProduct = {
-      id: Date.now(),
-      rating: 5.0,
-      created_at: new Date().toISOString().split('T')[0],
-      ...productData
-    };
-    productsStore.unshift(newProduct);
-    setStoredItem('agribridge_products', productsStore);
-    await fetchWithFallback('/buyer/products', { method: 'POST', body: JSON.stringify(productData) }, newProduct);
-    return newProduct;
+    const { file, ...fields } = productData || {};
+    const body = file ? buildFileFormData(productData) : JSON.stringify(fields);
+    return fetchWithFallback("/farmer/products", { method: "POST", body }, null);
+  },
+
+  async updateProduct(id, productData) {
+    const { file, ...fields } = productData || {};
+    const body = file ? buildFileFormData(productData) : JSON.stringify(fields);
+    return fetchWithFallback("/farmer/products/" + id, { method: "PUT", body }, null);
+  },
+
+  async deleteProduct(id) {
+    return fetchWithFallback("/farmer/products/" + id, { method: "DELETE" }, null);
   },
 
   async getCart() {
     cartStore = getStoredItem('agribridge_cart', []);
-    const res = await fetchWithFallback('/buyer/cart', { method: 'GET' }, cartStore);
-    return res.data || cartStore;
+    const user = getCurrentUser();
+    const ownedCart = cartStore.filter(item => belongsToUser(item, user, 'buyer_id', ['buyer_email']) || belongsToUser(item, user, 'user_id', ['buyer_email']));
+    const res = await fetchWithFallback('/buyer/cart', { method: 'GET' }, ownedCart);
+    return res.isMock ? ownedCart : (Array.isArray(res.data) ? res.data : []);
   },
 
   async addToCart(product, quantity = 1) {
+    const response = await fetchWithFallback("/buyer/cart", { method: "POST", body: JSON.stringify({ product_id: product.id, quantity }) }, null);
+    if (!response.success) return response;
     cartStore = getStoredItem('agribridge_cart', []);
-    const existing = cartStore.find(c => String(c.product_id) === String(product.id));
+    const user = getCurrentUser();
+    const existing = cartStore.find(c => String(c.product_id) === String(product.id) && belongsToUser(c, user, 'buyer_id', ['buyer_email']));
     if (existing) {
-      existing.quantity += quantity;
+      existing.quantity = Number(response.data?.quantity ?? (Number(existing.quantity) + Number(quantity)));
     } else {
       cartStore.push({
         cart_id: Date.now(),
+        buyer_id: user ? user.id : null,
+        buyer_email: user ? user.email : '',
         product_id: product.id,
         product_name: product.product_name,
         price_per_unit: product.price_per_unit,
-        quantity,
+        quantity: Number(response.data?.quantity ?? quantity),
         unit: product.unit,
         farmer_name: product.farmer_name
       });
     }
     setStoredItem('agribridge_cart', cartStore);
-    await fetchWithFallback('/buyer/cart', { method: 'POST', body: JSON.stringify({ product_id: product.id, quantity }) }, cartStore);
-    return true;
+    return { success: true };
   },
 
   async updateCartQuantity(cartId, quantity) {
+    const response = await fetchWithFallback("/buyer/cart/" + cartId, { method: "PUT", body: JSON.stringify({ quantity }) }, null);
+    if (!response.success) return response;
     cartStore = getStoredItem('agribridge_cart', []);
     const item = cartStore.find(c => String(c.cart_id) === String(cartId));
-    if (item) item.quantity = Math.max(1, quantity);
+    if (item) item.quantity = Number(response.data?.quantity ?? Math.max(1, quantity));
     setStoredItem('agribridge_cart', cartStore);
-    await fetchWithFallback(`/buyer/cart/${cartId}`, { method: 'PUT', body: JSON.stringify({ quantity }) }, true);
-    return true;
+    return { success: true };
   },
 
   async removeFromCart(cartId) {
@@ -479,14 +559,29 @@ export const api = {
   async makeFarmerPayment({ leaseId, amount, paymentMethod }) {
     transactionsStore = getStoredItem('agribridge_transactions', []);
     leasesStore = getStoredItem('agribridge_leases', []);
-    
-    const txId = `AGRI${Date.now()}`;
+    landsStore = getStoredItem('agribridge_lands', []);
+
+    const user = getCurrentUser();
+    const paymentResponse = await fetchWithFallback("/farmer/payment", { method: "POST", body: JSON.stringify({ lease_id: leaseId, amount, payment_method: paymentMethod }) }, null);
+    if (!paymentResponse.success) return paymentResponse;
+    const txId = paymentResponse.data?.transaction_id || "AGRI" + Date.now();
+    const settledAmount = Number(paymentResponse.data?.amount ?? amount);
+
+    const lease = leasesStore.find(l => String(l.id) === String(leaseId));
+    // Resolve the landowner for this lease, falling back to the linked land record if needed
+    const land = lease ? landsStore.find(l => String(l.id) === String(lease.land_id)) : null;
+    const ownerId = (lease && (lease.owner_id ?? lease.landowner_id)) ?? (land && (land.landowner_id ?? land.owner_id)) ?? null;
+    const ownerEmail = (lease && (lease.owner_email ?? lease.landowner_email)) ?? (land && land.owner_email) ?? '';
+
+    // Debit-side transaction (farmer)
     const newTx = {
       id: Date.now(),
       transaction_id: txId,
-      user_id: 1,
+      user_id: user ? user.id : null,
+      user_email: user ? user.email : '',
       type: "lease_payment",
-      amount: Number(amount),
+      direction: "debit",
+      amount: settledAmount,
       payment_method: paymentMethod,
       status: "successful",
       reference_id: `LEASE-${leaseId}`,
@@ -494,28 +589,33 @@ export const api = {
       created_at: new Date().toLocaleString()
     };
     transactionsStore.unshift(newTx);
+
     setStoredItem('agribridge_transactions', transactionsStore);
 
-    const lease = leasesStore.find(l => String(l.id) === String(leaseId));
     if (lease) {
       lease.payment_status = 'paid';
       setStoredItem('agribridge_leases', leasesStore);
     }
 
-    await fetchWithFallback('/farmer/payment', { method: 'POST', body: JSON.stringify({ lease_id: leaseId, amount, payment_method: paymentMethod }) }, newTx);
-    return newTx;
+    return { success: true, ...newTx };
   },
 
   async makeBuyerPayment({ items, totalAmount, shippingAddress, paymentMethod }) {
     ordersStore = getStoredItem('agribridge_orders', []);
     transactionsStore = getStoredItem('agribridge_transactions', []);
+    productsStore = getStoredItem('agribridge_products', []);
 
-    const txId = `AGRI${Date.now()}`;
-    const grandTotal = Number(totalAmount) + 150 + 50;
+    const user = getCurrentUser();
+    const checkoutResponse = await fetchWithFallback("/buyer/orders", { method: "POST", body: JSON.stringify({ items, total_amount: totalAmount, shipping_address: shippingAddress, payment_method: paymentMethod }) }, null);
+    if (!checkoutResponse.success) return checkoutResponse;
+    const txId = checkoutResponse.data?.transaction_id || "AGRI" + Date.now();
+    const completedOrderId = checkoutResponse.data?.order_id || Date.now();
+    const grandTotal = Number(checkoutResponse.data?.grand_total ?? (Number(totalAmount) + 150 + 50));
 
     const newOrder = {
-      id: Date.now(),
-      buyer_id: 3,
+      id: completedOrderId,
+      buyer_id: user ? user.id : null,
+      buyer_email: user ? user.email : '',
       total_amount: Number(totalAmount),
       delivery_fee: 150,
       platform_fee: 50,
@@ -530,11 +630,14 @@ export const api = {
     ordersStore.unshift(newOrder);
     setStoredItem('agribridge_orders', ordersStore);
 
+    // Buyer's debit transaction
     const newTx = {
       id: Date.now(),
       transaction_id: txId,
-      user_id: 3,
+      user_id: user ? user.id : null,
+      user_email: user ? user.email : '',
       type: "order_payment",
+      direction: "debit",
       amount: grandTotal,
       payment_method: paymentMethod,
       status: "successful",
@@ -543,25 +646,62 @@ export const api = {
       created_at: new Date().toLocaleString()
     };
     transactionsStore.unshift(newTx);
+
+    // Per-item: decrement stock for the sold product and credit the owning farmer
+    (items || []).forEach((item, idx) => {
+      const product = productsStore.find(p => String(p.id) === String(item.product_id ?? item.id));
+      const lineSubtotal = Number(item.price_per_unit) * Number(item.quantity);
+
+      if (product) {
+        const remaining = Number(product.available_qty ?? product.quantity ?? 0) - Number(item.quantity || 0);
+        product.available_qty = Math.max(0, remaining);
+        product.quantity = product.available_qty;
+        product.status = product.available_qty === 0 ? "out_of_stock" : "available";
+      }
+
+      const farmerId = (product && (product.farmer_id ?? null)) ?? item.farmer_id ?? null;
+      const farmerEmail = (product && (product.farmer_email ?? product.created_by)) ?? item.farmer_email ?? '';
+
+      const creditTx = {
+        id: Date.now() + idx + 1,
+        transaction_id: `${txId}-CR${idx + 1}`,
+        user_id: farmerId,
+        user_email: farmerEmail,
+        type: "payout",
+        direction: "credit",
+        amount: lineSubtotal,
+        payment_method: paymentMethod,
+        status: "successful",
+        reference_id: `ORD-${newOrder.id}`,
+        description: `Produce sale: ${item.product_name || 'item'} (Order #${newOrder.id})`,
+        created_at: new Date().toLocaleString()
+      };
+      transactionsStore.unshift(creditTx);
+    });
+
+    setStoredItem('agribridge_products', productsStore);
     setStoredItem('agribridge_transactions', transactionsStore);
 
-    cartStore = [];
+    cartStore = cartStore.filter(item => !belongsToUser(item, user, 'buyer_id', ['buyer_email']));
     setStoredItem('agribridge_cart', cartStore);
 
-    await fetchWithFallback('/buyer/orders', { method: 'POST', body: JSON.stringify({ items, total_amount: totalAmount, shipping_address: shippingAddress, payment_method: paymentMethod }) }, newOrder);
-    return { order: newOrder, transaction: newTx };
+    return { success: true, order: newOrder, transaction: newTx };
   },
 
   async getTransactions() {
     transactionsStore = getStoredItem('agribridge_transactions', []);
-    const res = await fetchWithFallback('/farmer/transactions', { method: 'GET' }, transactionsStore);
-    return res.data || transactionsStore;
+    const user = getCurrentUser();
+    const ownedTransactions = transactionsStore.filter(tx => belongsToUser(tx, user, 'user_id', ['user_email']));
+    const res = await fetchWithFallback('/farmer/transactions', { method: 'GET' }, ownedTransactions);
+    return Array.isArray(res.data) ? res.data : ownedTransactions
   },
 
   async getOrders() {
     ordersStore = getStoredItem('agribridge_orders', []);
-    const res = await fetchWithFallback('/buyer/orders', { method: 'GET' }, ordersStore);
-    return res.data || ordersStore;
+    const user = getCurrentUser();
+    const ownedOrders = ordersStore.filter(order => belongsToUser(order, user, 'buyer_id', ['buyer_email']));
+    const res = await fetchWithFallback('/buyer/orders', { method: 'GET' }, ownedOrders);
+    return Array.isArray(res.data) ? res.data : ownedOrders
   },
 
   // DYNAMIC DASHBOARD STATS CALCULATED FROM REAL USER ACTIONS
@@ -574,42 +714,54 @@ export const api = {
     ordersStore = getStoredItem('agribridge_orders', []);
     usersStore = getStoredItem('agribridge_users', []);
 
+    const user = getCurrentUser();
+    const myLands = landsStore.filter(land => belongsToUser(land, user, 'landowner_id', ['owner_email', 'created_by']) || belongsToUser(land, user, 'owner_id', ['owner_email', 'created_by']));
+    const myProducts = productsStore.filter(product => belongsToUser(product, user, 'farmer_id', ['farmer_email', 'created_by']));
+    const myApplications = applicationsStore.filter(app => belongsToUser(app, user, 'farmer_id', ['farmer_email']));
+    const myLeases = leasesStore.filter(lease => role === 'landowner' ? belongsToUser(lease, user, 'owner_id', ['owner_email']) : belongsToUser(lease, user, 'farmer_id', ['farmer_email']));
+    const myTransactions = transactionsStore.filter(tx => belongsToUser(tx, user, 'user_id', ['user_email']));
+    const myOrders = ordersStore.filter(order => belongsToUser(order, user, 'buyer_id', ['buyer_email']));
+
     let calculated = {};
 
     if (role === 'farmer') {
-      const totalSpending = transactionsStore
-        .filter(t => t.type === 'lease_payment' || t.type === 'order_payment')
+      const totalSpending = myTransactions
+        .filter(t => t.type === 'lease_payment')
+        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      const totalEarnings = myTransactions
+        .filter(t => t.type === 'payout')
         .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
       calculated = {
-        total_leases: leasesStore.length,
-        total_crops: productsStore.length,
-        pending_applications: applicationsStore.filter(a => a.status === 'pending').length,
-        approved_applications: applicationsStore.filter(a => a.status === 'approved').length,
+        total_leases: myLeases.length,
+        total_crops: myProducts.length,
+        pending_applications: myApplications.filter(a => a.status === 'pending').length,
+        approved_applications: myApplications.filter(a => a.status === 'approved').length,
         total_spending: totalSpending,
-        recent_transactions: transactionsStore
+        total_earnings: totalEarnings,
+        recent_transactions: myTransactions
       };
     } else if (role === 'landowner') {
-      const totalEarnings = transactionsStore
+      const totalEarnings = myTransactions
         .filter(t => t.type === 'lease_payment')
         .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
       calculated = {
-        total_lands: landsStore.length,
-        active_leases: leasesStore.length,
-        pending_applications: applicationsStore.filter(a => a.status === 'pending').length,
+        total_lands: myLands.length,
+        active_leases: myLeases.length,
+        pending_applications: applicationsStore.filter(a => a.status === 'pending' && myLands.some(land => String(land.id) === String(a.land_id))).length,
         total_earnings: totalEarnings,
-        recent_applications: applicationsStore
+        recent_applications: applicationsStore.filter(app => myLands.some(land => String(land.id) === String(app.land_id)))
       };
     } else if (role === 'buyer') {
-      const totalSpending = ordersStore.reduce((sum, o) => sum + Number(o.grand_total || 0), 0);
+      const totalSpending = myOrders.reduce((sum, o) => sum + Number(o.grand_total || 0), 0);
 
       calculated = {
-        total_orders: ordersStore.length,
-        pending_orders: ordersStore.filter(o => o.order_status === 'processing').length,
-        completed_orders: ordersStore.filter(o => o.order_status === 'delivered').length,
+        total_orders: myOrders.length,
+        pending_orders: myOrders.filter(o => o.order_status === 'processing').length,
+        completed_orders: myOrders.filter(o => o.order_status === 'delivered').length,
         total_spending: totalSpending,
-        recent_orders: ordersStore
+        recent_orders: myOrders
       };
     } else if (role === 'admin') {
       const totalRevenue = transactionsStore.reduce((sum, t) => sum + Number(t.amount || 0), 0);
@@ -895,4 +1047,3 @@ export const api = {
 };
 
 export default api;
-

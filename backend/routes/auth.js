@@ -4,373 +4,228 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { query } from '../config/db.js';
+import { getStoredAssetUrl } from '../services/storageService.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { BCRYPT_ROUNDS, getJwtSecret, getStoredPasswordHash, isValidEmail, normalizeEmail, passwordFingerprint, validatePassword } from '../services/authSecurity.js';
 
-const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'agribridge_super_secret_jwt_key_2026';
+const OTP_TTL_MS = 10 * 60 * 1000;
 
-// Gmail SMTP Transporter Configuration (Using Environment Variables)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD
-  }
-});
-
-// Verify SMTP Connection on Startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.warn('⚠️ [SMTP Verification] Gmail SMTP configuration warning:', error.message);
-  } else {
-    console.log('✅ [SMTP Verification] Gmail SMTP server is connected and ready to send emails.');
-  }
-});
-
-// In-Memory Store for Password Reset OTPs: Map<cleanTarget, { otp, expiresAt, lastRequestedAt }>
-const resetOtps = new Map();
-
-// Helper to validate password policy
-function validatePassword(password) {
-  if (!password) return 'Password is required.';
-  if (password.length < 8 || password.length > 15) return 'Password must be between 8 and 15 characters long.';
-  if (/\s/.test(password)) return 'Password cannot contain spaces.';
-  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter (A-Z).';
-  if (!/[0-9]/.test(password)) return 'Password must contain at least one number (0-9).';
-  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) return 'Password must contain at least one symbol (e.g. @, #, $, %).';
-  return null;
+function limiter(windowMs, maximum) {
+  const attempts = new Map();
+  return (key) => {
+    const now = Date.now();
+    const entry = attempts.get(key);
+    if (!entry || entry.expiresAt <= now) {
+      attempts.set(key, { count: 1, expiresAt: now + windowMs });
+      return false;
+    }
+    entry.count += 1;
+    return entry.count > maximum;
+  };
 }
 
-// POST /api/auth/register
-router.post('/register', async (req, res) => {
-  try {
-    const { full_name, email, password, role, phone } = req.body;
+function requestKey(req, value = '') {
+  return `${req.ip || req.socket?.remoteAddress || 'unknown'}:${value}`;
+}
 
-    if (!full_name || !email || !password || !role) {
-      return res.status(400).json({ success: false, message: 'Please provide all required fields' });
-    }
+function hashOtp(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
 
-    const existing = await query('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
-    if (existing.length > 0) {
-      return res.status(400).json({ success: false, message: 'User with this email already exists' });
-    }
+function validOtp(value, expectedHash) {
+  const actual = Buffer.from(hashOtp(value), 'hex');
+  const expected = Buffer.from(expectedHash || '', 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
 
-    const password_hash = await bcrypt.hash(password, 10);
-    const result = await query(
-      'INSERT INTO users (name, full_name, email, password, password_hash, role, phone) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [full_name, full_name, email.toLowerCase().trim(), password_hash, password_hash, role, phone || '']
-    );
+async function deliverCode(email, otp, subject, message) {
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_APP_PASSWORD;
+  if (!user || !pass) throw new Error('Email delivery is not configured.');
+  const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
+  await transporter.sendMail({ from: `"AgriBridge Support" <${user}>`, to: email, subject, text: `${message} ${otp}. This code expires in 10 minutes.` });
+}
 
-    const userId = result.insertId;
+function signToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role, full_name: user.full_name || user.name, passwordFingerprint: passwordFingerprint(getStoredPasswordHash(user)) },
+    getJwtSecret(),
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  );
+}
 
-    if (role === 'farmer') {
-      await query('INSERT INTO farmer_profiles (user_id) VALUES (?)', [userId]);
-    } else if (role === 'buyer') {
-      await query('INSERT INTO buyer_profiles (user_id) VALUES (?)', [userId]);
-    } else if (role === 'landowner') {
-      await query('INSERT INTO landowner_profiles (user_id) VALUES (?)', [userId]);
-    }
+function safeUser(user, profile = {}) {
+  return {
+    id: user.id,
+    full_name: user.full_name || user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone,
+    avatar: user.avatar || (user.avatar_cloudinary_public_id ? getStoredAssetUrl(user.avatar, user.avatar_cloudinary_public_id, user.avatar_cloudinary_resource_type) : user.avatar_url),
+    ...profile
+  };
+}
 
-    const token = jwt.sign({ id: userId, email: email.toLowerCase().trim(), role, full_name }, JWT_SECRET, { expiresIn: '7d' });
+export function createAuthRouter({ dbQuery = query, sendMail = deliverCode } = {}) {
+  const router = express.Router();
+  const resetCodes = new Map();
+  const registrationCodes = new Map();
+  const tooManyLogins = limiter(15 * 60 * 1000, 5);
+  const tooManyResets = limiter(60 * 60 * 1000, 3);
+  let userColumns;
 
-    return res.status(201).json({
-      success: true,
-      message: 'Registration successful',
-      data: {
-        token,
-        user: { id: userId, full_name, email: email.toLowerCase().trim(), role, phone }
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Server registration error' });
+  async function columns() {
+    if (userColumns) return userColumns;
+    const rows = await dbQuery("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'");
+    userColumns = new Set(rows.map((row) => String(row.column_name || row.COLUMN_NAME || row.Field || '').toLowerCase()));
+    return userColumns;
   }
-});
 
-// POST /api/auth/login
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
-    }
-
-    const users = await query('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()]);
-    if (users.length === 0) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
-    }
-
-    const user = users[0];
-    const userHash = user.password_hash || user.password;
-    const isMatch = await bcrypt.compare(password, userHash);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
-    }
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, full_name: user.full_name || user.name },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    return res.json({
-      success: true,
-      data: {
-        token,
-        user: {
-          id: user.id,
-          full_name: user.full_name || user.name,
-          email: user.email,
-          role: user.role,
-          phone: user.phone,
-          avatar: user.avatar || user.avatar_url
-        }
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Login error' });
+  async function insertUser({ full_name, email, password, role, phone }) {
+    const cleanEmail = normalizeEmail(email);
+    if (!full_name || full_name.trim().length < 3 || !isValidEmail(cleanEmail) || !['farmer', 'buyer', 'landowner'].includes(role)) throw Object.assign(new Error('Please provide valid registration details.'), { status: 400 });
+    const passwordError = validatePassword(password);
+    if (passwordError) throw Object.assign(new Error(passwordError), { status: 400 });
+    if ((await dbQuery('SELECT id FROM users WHERE email = ?', [cleanEmail])).length) throw Object.assign(new Error('An account with this email address already exists.'), { status: 409 });
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const fields = ['full_name', 'email', 'role', 'phone'];
+    const values = [full_name.trim(), cleanEmail, role, String(phone || '').trim()];
+    const available = await columns();
+    if (available.has('name')) { fields.unshift('name'); values.unshift(full_name.trim()); }
+    if (available.has('password')) { fields.splice(fields.indexOf('role'), 0, 'password'); values.splice(values.indexOf(role), 0, passwordHash); }
+    if (available.has('password_hash')) { fields.splice(fields.indexOf('role'), 0, 'password_hash'); values.splice(values.indexOf(role), 0, passwordHash); }
+    const result = await dbQuery(`INSERT INTO users (${fields.join(', ')}) VALUES (${fields.map(() => '?').join(', ')})`, values);
+    if (role === 'farmer') await dbQuery('INSERT INTO farmer_profiles (user_id) VALUES (?)', [result.insertId]);
+    if (role === 'buyer') await dbQuery('INSERT INTO buyer_profiles (user_id) VALUES (?)', [result.insertId]);
+    if (role === 'landowner') await dbQuery('INSERT INTO landowner_profiles (user_id) VALUES (?)', [result.insertId]);
+    return { id: result.insertId, full_name: full_name.trim(), email: cleanEmail, role, phone: String(phone || '').trim(), password: passwordHash, password_hash: passwordHash };
   }
-});
 
-// POST /api/auth/send-otp (Backend OTP Generation & Dispatch)
-router.post('/send-otp', async (req, res) => {
-  try {
-    const { target, channel } = req.body;
-    if (!target) {
-      return res.status(400).json({ success: false, message: 'Target (email or phone) is required.' });
-    }
-
-    const isPhone = channel === 'phone';
-    const cleanTarget = isPhone ? target.replace(/\D/g, '') : target.toLowerCase().trim();
-
-    if (!cleanTarget) {
-      return res.status(400).json({ success: false, message: 'Please provide a valid email or phone number.' });
-    }
-
-    // 1. MySQL User Lookup (Handle Email & Phone Separately)
-    let users = [];
-    if (isPhone) {
-      users = await query(
-        "SELECT * FROM users WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', ''), '(', '') LIKE ?",
-        [`%${cleanTarget}%`]
-      );
-    } else {
-      users = await query('SELECT * FROM users WHERE email = ?', [cleanTarget]);
-    }
-
-    if (!users || users.length === 0) {
-      if (!isPhone && cleanTarget.includes('@')) {
-        const defaultHash = await bcrypt.hash('AgriBridge@123', 10);
-        try {
-          await query(
-            'INSERT INTO users (name, full_name, email, password, password_hash, role, phone) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [cleanTarget.split('@')[0], cleanTarget.split('@')[0], cleanTarget, defaultHash, defaultHash, 'farmer', '']
-          );
-          console.log(`[OTP Sync] Auto-synced ${cleanTarget} into MySQL database.`);
-        } catch (e) {
-          console.warn('[OTP Sync Note]:', e.message);
-        }
-      } else {
-        return res.status(404).json({
-          success: false,
-          message: 'No registered user account was found.'
-        });
-      }
-    }
-
-    // 2. Handle Phone Channel Error if SMS Provider Not Configured
-    if (isPhone) {
-      console.log(`[OTP Request] Target: ${cleanTarget}, Channel: phone - SMS Provider Not Configured`);
-      return res.status(501).json({
-        success: false,
-        message: 'SMS OTP service is not configured. Please configure an SMS provider.'
-      });
-    }
-
-    // 3. Cooldown / Rate Limiting (60 Seconds)
-    const existingRecord = resetOtps.get(cleanTarget);
-    if (existingRecord && (Date.now() - existingRecord.lastRequestedAt < 60000)) {
-      return res.status(429).json({
-        success: false,
-        message: 'Please wait 60 seconds before requesting another verification code.'
-      });
-    }
-
-    // 4. Generate Cryptographically Strong 6-digit OTP
-    const otp = String(crypto.randomInt(100000, 1000000));
-
-    // 5. Store OTP with 10-Minute Expiration
-    resetOtps.set(cleanTarget, {
-      otp,
-      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-      lastRequestedAt: Date.now()
-    });
-
-    console.log(`[OTP Request] Target: ${cleanTarget}, Channel: email - Attempting email delivery`);
-
-    // 6. Nodemailer Delivery via Gmail SMTP
-    const senderEmail = process.env.EMAIL_USER || 'agribridge.pvt.ltd.com@gmail.com';
-    const senderPass = process.env.EMAIL_APP_PASSWORD || 'AgriBridge@123';
-
-    const activeTransporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: senderEmail,
-        pass: senderPass
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-
+  router.post('/register', async (req, res) => {
     try {
-      await activeTransporter.sendMail({
-        from: `"AgriBridge Support" <${senderEmail}>`,
-        to: cleanTarget,
-        subject: '🔑 AgriBridge — Password Reset Verification Code',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e1e7e2; border-radius: 12px; background-color: #ffffff;">
-            <div style="text-align: center; padding-bottom: 20px; border-bottom: 2px solid #2E7D32;">
-              <h2 style="color: #2E7D32; margin: 0; font-size: 24px;">🌿 AgriBridge Platform</h2>
-              <p style="color: #68736A; margin: 6px 0 0; font-size: 14px;">Connecting Land, Farmers & Opportunities</p>
-            </div>
-            <div style="padding: 24px 0;">
-              <p style="font-size: 16px; color: #172018; margin-bottom: 12px;">Hello,</p>
-              <p style="font-size: 14px; color: #4a5568; line-height: 1.6;">You requested a password reset for your AgriBridge account. Your 6-digit verification code is:</p>
-              <div style="background-color: #E8F5E9; text-align: center; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px dashed #2E7D32;">
-                <span style="font-size: 34px; font-weight: bold; letter-spacing: 10px; color: #2E7D32;">${otp}</span>
-              </div>
-              <p style="font-size: 13px; color: #e53e3e; margin-top: 12px;"><strong>⚠️ Note:</strong> This verification code is valid for <strong>10 minutes</strong> only.</p>
-              <p style="font-size: 12px; color: #718096; margin-top: 16px;">If you did not request this password reset, please ignore this email. Your password will remain unchanged.</p>
-            </div>
-            <div style="text-align: center; padding-top: 16px; border-top: 1px solid #edf2f7; color: #a0aec0; font-size: 11px;">
-              &copy; 2026 AgriBridge Platform. All rights reserved.
-            </div>
-          </div>
-        `
-      });
-
-      console.log(`[OTP Request] Real Gmail delivery successful to ${cleanTarget}`);
-      return res.json({
-        success: true,
-        message: 'Verification code sent successfully.'
-      });
-    } catch (mailErr) {
-      console.error('[OTP Request] Email delivery warning:', mailErr.message);
-      console.log(`🔑 [DEVELOPER CONSOLE OTP] Generated OTP for ${cleanTarget}: Code = ${otp}`);
-
-      if (mailErr.message.includes('BadCredentials') || mailErr.message.includes('Username and Password not accepted')) {
-        return res.status(400).json({
-          success: false,
-          message: 'Gmail authentication failed: Google requires a 16-character App Password (not your standard Gmail password). Please generate a 16-character App Password in Google Account > Security > App Passwords.'
-        });
-      }
-
-      return res.status(500).json({
-        success: false,
-        message: `Failed to deliver email: ${mailErr.message}`
-      });
+      const user = await insertUser(req.body || {});
+      return res.status(201).json({ success: true, message: 'Registration successful.', data: { token: signToken(user), user: safeUser(user) } });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+      console.error('Registration failed:', error.message);
+      return res.status(500).json({ success: false, message: 'Unable to create the account. Please try again.' });
     }
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+  });
 
-// POST /api/auth/reset-password (Verifies Backend OTP & Updates Hashed Password in MySQL)
-router.post('/reset-password', async (req, res) => {
-  try {
-    const { target, otp, newPassword } = req.body;
-
-    if (!target || !otp || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Target, verification code, and new password are required.'
-      });
+  router.post('/login', async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    if (tooManyLogins(requestKey(req, email))) return res.status(429).json({ success: false, message: 'Too many sign-in attempts. Please try again later.' });
+    try {
+      const password = String(req.body?.password || '');
+      if (!isValidEmail(email) || !password) return res.status(400).json({ success: false, message: 'Email and password are required.' });
+      const user = (await dbQuery('SELECT * FROM users WHERE email = ?', [email]))[0];
+      const storedHash = getStoredPasswordHash(user);
+      if (!user || !storedHash || !(await bcrypt.compare(password, storedHash))) return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      if (user.status && user.status !== 'active') return res.status(403).json({ success: false, message: 'This account is not active. Please contact support.' });
+      let profile = {};
+      if (user.role === 'farmer') profile = (await dbQuery('SELECT farm_size_acres AS farm_size, primary_crops, location FROM farmer_profiles WHERE user_id = ?', [user.id]))[0] || {};
+      if (user.role === 'buyer') profile = (await dbQuery('SELECT company_name, shipping_address FROM buyer_profiles WHERE user_id = ?', [user.id]))[0] || {};
+      if (user.role === 'landowner') profile = (await dbQuery('SELECT total_land_acres AS farm_size FROM landowner_profiles WHERE user_id = ?', [user.id]))[0] || {};
+      return res.json({ success: true, data: { token: signToken(user), user: safeUser(user, profile) } });
+    } catch (error) {
+      console.error('Login failed:', error.message);
+      return res.status(500).json({ success: false, message: 'Unable to sign in. Please try again.' });
     }
+  });
 
-    const cleanTarget = target.toLowerCase().trim();
-    const cleanDigits = cleanTarget.replace(/\D/g, '');
-
-    // 1. Validate Password Policy
-    const pwdErr = validatePassword(newPassword);
-    if (pwdErr) {
-      return res.status(400).json({ success: false, message: pwdErr });
+  router.post('/send-otp', async (req, res) => {
+    const email = normalizeEmail(req.body?.target);
+    const genericMessage = 'If an account exists for this address, a verification code has been sent.';
+    if (!isValidEmail(email) || req.body?.channel === 'phone') return res.status(400).json({ success: false, message: 'Enter a valid email address to reset your password.' });
+    if (tooManyResets(requestKey(req, email))) return res.status(429).json({ success: false, message: 'Too many reset requests. Please try again later.' });
+    try {
+      const user = (await dbQuery('SELECT id FROM users WHERE email = ?', [email]))[0];
+      if (!user) return res.json({ success: true, message: genericMessage });
+      const otp = String(crypto.randomInt(100000, 1000000));
+      await sendMail(email, otp, 'AgriBridge password reset code', 'Your password reset code is');
+      resetCodes.set(email, { userId: user.id, otpHash: hashOtp(otp), expiresAt: Date.now() + OTP_TTL_MS, attempts: 0, used: false });
+      return res.json({ success: true, message: genericMessage });
+    } catch (error) {
+      console.error('Password reset delivery failed:', error.message);
+      return res.status(503).json({ success: false, message: 'Password reset is temporarily unavailable. Please try again later.' });
     }
+  });
 
-    // 2. Retrieve OTP Record
-    const record = resetOtps.get(cleanTarget) || (cleanDigits ? resetOtps.get(cleanDigits) : null);
-
-    if (!record) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification code.'
-      });
+  router.post('/reset-password', async (req, res) => {
+    const email = normalizeEmail(req.body?.target);
+    const otp = String(req.body?.otp || '').trim();
+    const passwordError = validatePassword(req.body?.newPassword);
+    if (!isValidEmail(email) || !/^\d{6}$/.test(otp) || passwordError) return res.status(400).json({ success: false, message: passwordError || 'Invalid or expired verification code.' });
+    const record = resetCodes.get(email);
+    if (!record || record.used || record.expiresAt < Date.now() || record.attempts >= 5 || !validOtp(otp, record.otpHash)) {
+      if (record && !validOtp(otp, record.otpHash)) record.attempts += 1;
+      if (record && (record.expiresAt < Date.now() || record.attempts >= 5)) resetCodes.delete(email);
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
     }
-
-    // 3. Check Expiration (10 Minutes)
-    if (Date.now() > record.expiresAt) {
-      resetOtps.delete(cleanTarget);
-      if (cleanDigits) resetOtps.delete(cleanDigits);
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification code.'
-      });
+    record.used = true;
+    try {
+      const passwordHash = await bcrypt.hash(req.body.newPassword, BCRYPT_ROUNDS);
+      const available = await columns();
+      const assignments = [];
+      const values = [];
+      if (available.has('password')) { assignments.push('password = ?'); values.push(passwordHash); }
+      if (available.has('password_hash')) { assignments.push('password_hash = ?'); values.push(passwordHash); }
+      if (!assignments.length) throw new Error('The users table has no supported password column.');
+      values.push(record.userId);
+      const updated = await dbQuery(`UPDATE users SET ${assignments.join(', ')} WHERE id = ?`, values);
+      if (!updated || updated.affectedRows !== 1) throw new Error('Password update did not affect exactly one account.');
+      resetCodes.delete(email);
+      return res.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' });
+    } catch (error) {
+      record.used = false;
+      console.error('Password reset failed:', error.message);
+      return res.status(500).json({ success: false, message: 'Unable to update the password. Please try again.' });
     }
+  });
 
-    // 4. Verify Submitted OTP
-    if (record.otp !== String(otp).trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification code.'
-      });
+  router.post('/send-registration-otp', async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    try {
+      if ((await dbQuery('SELECT id FROM users WHERE email = ?', [email])).length) return res.status(409).json({ success: false, message: 'An account with this email address already exists.' });
+      const otp = String(crypto.randomInt(100000, 1000000));
+      await sendMail(email, otp, 'Verify your AgriBridge email address', 'Your registration code is');
+      registrationCodes.set(email, { otpHash: hashOtp(otp), expiresAt: Date.now() + OTP_TTL_MS });
+      return res.json({ success: true, message: 'Verification code sent. Check your email inbox.' });
+    } catch (error) {
+      console.error('Registration email failed:', error.message);
+      return res.status(503).json({ success: false, message: 'Verification email is temporarily unavailable. Please try again later.' });
     }
+  });
 
-    // 5. Hash New Password with Bcrypt
-    const password_hash = await bcrypt.hash(newPassword, 10);
-
-    // 6. Update Password in MySQL Database (Separate Email & Phone)
-    let updateRes;
-    if (cleanTarget.includes('@')) {
-      updateRes = await query('UPDATE users SET password = ?, password_hash = ? WHERE email = ?', [password_hash, password_hash, cleanTarget]);
-    } else {
-      updateRes = await query(
-        "UPDATE users SET password = ?, password_hash = ? WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', ''), '(', '') LIKE ?",
-        [password_hash, password_hash, `%${cleanDigits}%`]
-      );
+  router.post('/verify-registration', async (req, res) => {
+    const body = req.body || {};
+    const email = normalizeEmail(body.email);
+    const record = registrationCodes.get(email);
+    if (!record || record.expiresAt < Date.now() || !validOtp(body.otp, record.otpHash)) return res.status(400).json({ success: false, message: 'Invalid or expired email verification code.' });
+    try {
+      const user = await insertUser(body);
+      registrationCodes.delete(email);
+      return res.status(201).json({ success: true, message: 'Registration successful and email verified.', data: { token: signToken(user), user: safeUser(user) } });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+      console.error('Registration verification failed:', error.message);
+      return res.status(500).json({ success: false, message: 'Unable to create the account. Please try again.' });
     }
+  });
 
-    if (updateRes.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No registered user account was found.'
-      });
+  router.get('/me', authenticateToken, async (req, res) => {
+    try {
+      const user = (await dbQuery('SELECT * FROM users WHERE id = ?', [req.user.id]))[0];
+      if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+      return res.json({ success: true, data: safeUser(user) });
+    } catch (error) {
+      console.error('Profile lookup failed:', error.message);
+      return res.status(500).json({ success: false, message: 'Unable to load the profile.' });
     }
+  });
 
-    // 7. Delete OTP from Memory
-    resetOtps.delete(cleanTarget);
-    if (cleanDigits) resetOtps.delete(cleanDigits);
+  return router;
+}
 
-    return res.json({
-      success: true,
-      message: 'Password updated successfully! You can now log in with your new password.'
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// GET /api/auth/me
-router.get('/me', authenticateToken, async (req, res) => {
-  try {
-    const users = await query('SELECT id, full_name, email, role, phone, avatar, created_at FROM users WHERE id = ?', [req.user.id]);
-    if (users.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    return res.json({ success: true, data: users[0] });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-export default router;
+export default createAuthRouter();

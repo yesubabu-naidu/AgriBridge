@@ -189,11 +189,22 @@ CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   order_id INT NOT NULL,
   product_id INT NOT NULL,
+<<<<<<< HEAD
   quantity DECIMAL(10,2) NOT NULL,
   unit_price DECIMAL(10,2) NOT NULL,
   subtotal DECIMAL(12,2) NOT NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+=======
+  farmer_id INT NOT NULL,
+  crop_name VARCHAR(120) NOT NULL,
+  quantity_kg DECIMAL(10,2) NOT NULL,
+  price_per_kg DECIMAL(10,2) NOT NULL,
+  subtotal DECIMAL(12,2) NOT NULL,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE
+>>>>>>> e4e5f45 (added new features to project)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 13. PAYMENTS
