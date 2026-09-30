@@ -112,8 +112,8 @@ router.post('/', authenticateToken, authorizeRoles('landowner', 'admin'), upload
     if (req.file) {
       validateUpload(req.file);
       uploadedAsset = await uploadBuffer({ publicId: makePublicId({ scope: 'lands', ownerId: req.user.id, recordId: landId, originalName: req.file.originalname }), buffer: req.file.buffer, contentType: req.file.mimetype, originalName: req.file.originalname });
-      await query('UPDATE lands SET image_url = ? WHERE id = ?', [uploadedAsset.url, landId]);
-      await query('INSERT INTO land_images (land_id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, storage_provider, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)', [landId, uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'cloudinary']);
+      // await query('UPDATE lands SET image_url = ? WHERE id = ?', [uploadedAsset.url, landId]);
+      await query('INSERT INTO land_images (land_id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, storage_provider, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)', [landId, uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supbase']);
     } else if (imageUrl) await query('INSERT INTO land_images (land_id, image_url, storage_provider, is_primary) VALUES (?, ?, ?, TRUE)', [landId, imageUrl, 'external']);
     return res.status(201).json({ success: true, message: 'Land published successfully', data: { id: landId } });
   } catch (error) { if (uploadedAsset) await cleanupAssets([uploadedAsset]); return fail(res, error); }
@@ -132,9 +132,9 @@ router.put('/:id', authenticateToken, authorizeRoles('landowner', 'admin'), uplo
       uploadedAsset = await uploadBuffer({ publicId: makePublicId({ scope: 'lands', ownerId: land.owner_id, recordId: land.id, originalName: req.file.originalname }), buffer: req.file.buffer, contentType: req.file.mimetype, originalName: req.file.originalname });
       await query('UPDATE lands SET image_url = ? WHERE id = ?', [uploadedAsset.url, land.id]);
       if (existing.length) {
-        await query('UPDATE land_images SET image_url = ?, cloudinary_public_id = ?, cloudinary_resource_type = ?, original_file_name = ?, mime_type = ?, file_size = ?, storage_provider = ? WHERE id = ?', [uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'cloudinary', existing[0].id]);
+        await query('UPDATE land_images SET image_url = ?, cloudinary_public_id = ?, cloudinary_resource_type = ?, original_file_name = ?, mime_type = ?, file_size = ?, storage_provider = ? WHERE id = ?', [uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supbase', existing[0].id]);
         await cleanupAssets(existing);
-      } else await query('INSERT INTO land_images (land_id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, storage_provider, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)', [land.id, uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'cloudinary']);
+      } else await query('INSERT INTO land_images (land_id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, storage_provider, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)', [land.id, uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supbase']);
     }
     return res.json({ success: true, message: 'Land listing updated successfully' });
   } catch (error) { if (uploadedAsset) await cleanupAssets([uploadedAsset]); return fail(res, error); }
