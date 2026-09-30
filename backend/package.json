@@ -1,18 +1,17 @@
 {
   "name": "agribridge-backend",
   "version": "1.0.0",
-  "description": "AgriBridge Express REST API Backend with Cloud MySQL and mysql2",
+  "description": "AgriBridge Express REST API Backend with PostgreSQL and Supabase Storage",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "inspect:file-data": "node scripts/inspect-file-data.js",
-    "migrate:files": "node scripts/migrate-base64-to-cloudinary.js"
+    "migrate:files": "node scripts/migrate-base64-to-supabase.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^2.11.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

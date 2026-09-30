@@ -1,21 +1,13 @@
 import crypto from 'crypto';
 import path from 'path';
 import dotenv from 'dotenv';
-import { v2 as cloudinary } from 'cloudinary';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 dotenv.config({ path: path.join(process.cwd(), 'backend/.env') });
 
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-const apiKey = process.env.CLOUDINARY_API_KEY;
-const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-cloudinary.config({
-  cloud_name: cloudName,
-  api_key: apiKey,
-  api_secret: apiSecret,
-  secure: true
-});
+const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'AgriBridge';
 
 export const MAX_FILE_SIZE = Number(process.env.MAX_FILE_SIZE_BYTES || 10 * 1024 * 1024);
 export const ALLOWED_MIME_TYPES = new Set(
@@ -26,15 +18,35 @@ export const ALLOWED_MIME_TYPES = new Set(
 );
 
 export function isStorageConfigured() {
-  return Boolean(cloudName && apiKey && apiSecret);
+  return Boolean(supabaseUrl && supabaseServiceRoleKey && bucketName);
 }
 
 function requireStorage() {
   if (!isStorageConfigured()) {
-    const error = new Error('Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET on the backend.');
+    const error = new Error(
+      'Supabase Storage is not configured. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_STORAGE_BUCKET on the backend.'
+    );
     error.code = 'STORAGE_NOT_CONFIGURED';
     throw error;
   }
+}
+
+function storageHeaders(extra = {}) {
+  requireStorage();
+  return {
+    Authorization: `Bearer ${supabaseServiceRoleKey}`,
+    apikey: supabaseServiceRoleKey,
+    ...extra
+  };
+}
+
+function normalizeObjectPath(value) {
+  return String(value || '')
+    .replace(/^\/+/, '')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join('/');
 }
 
 export function validateUpload(file) {
@@ -56,8 +68,7 @@ export function makePublicId({ scope, ownerId, recordId, originalName }) {
   const safeScope = String(scope || 'files').replace(/[^a-z0-9/_-]/gi, '').replace(/^\/+|\/+$/g, '') || 'files';
   const safeOwner = String(ownerId || 'unknown').replace(/[^a-z0-9_-]/gi, '') || 'unknown';
   const safeRecord = String(recordId || 'unassigned').replace(/[^a-z0-9_-]/gi, '') || 'unassigned';
-  const suffix = `${crypto.randomUUID()}${extension}`;
-  return `agribridge/${safeScope}/${safeOwner}/${safeRecord}/${suffix}`;
+  return `agribridge/${safeScope}/${safeOwner}/${safeRecord}/${crypto.randomUUID()}${extension}`;
 }
 
 export function makeDeterministicPublicId({ scope, ownerId, recordId, originalName, buffer }) {
@@ -66,53 +77,86 @@ export function makeDeterministicPublicId({ scope, ownerId, recordId, originalNa
   return `agribridge/migrated/${scope}/${ownerId || 'unknown'}/${recordId}/${digest}${extension}`;
 }
 
-export function uploadBuffer({ buffer, contentType, originalName, publicId, overwrite = false, deliveryType = 'upload' }) {
+export async function uploadBuffer({
+  buffer,
+  contentType,
+  originalName,
+  publicId,
+  overwrite = false
+}) {
   requireStorage();
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        public_id: publicId,
-        overwrite,
-        unique_filename: false,
-        use_filename: false,
-        resource_type: 'auto',
-        type: deliveryType,
-        invalidate: true,
-        context: originalName ? { original_filename: String(originalName).slice(0, 200) } : undefined
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        return resolve({
-          url: result.secure_url || result.url,
-          publicId: result.public_id,
-          resourceType: result.resource_type || 'image',
-          bytes: result.bytes || buffer.length,
-          format: result.format || null,
-          provider: 'cloudinary',
-          contentType
-        });
-      }
-    );
-    stream.end(buffer);
+
+  if (!Buffer.isBuffer(buffer)) {
+    throw new TypeError('uploadBuffer requires a Buffer.');
+  }
+
+  const objectPath = normalizeObjectPath(publicId);
+  if (!objectPath) {
+    throw new Error('A valid Supabase Storage object path is required.');
+  }
+
+  const endpoint = `${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucketName)}/${objectPath}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: storageHeaders({
+      'Content-Type': contentType || 'application/octet-stream',
+      'x-upsert': overwrite ? 'true' : 'false',
+      'cache-control': '3600'
+    }),
+    body: buffer
   });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    const error = new Error(`Supabase Storage upload failed (${response.status}): ${responseText.slice(0, 500)}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  return {
+    url: getPublicObjectUrl(objectPath),
+    publicId: objectPath,
+    resourceType: contentType === 'application/pdf' ? 'raw' : 'image',
+    bytes: buffer.length,
+    format: path.extname(originalName || '').replace('.', '').toLowerCase() || null,
+    provider: 'supabase',
+    contentType
+  };
 }
 
-export async function deleteObject(publicId, resourceType = 'image', deliveryType = 'upload') {
+export async function deleteObject(publicId) {
   if (!publicId) return;
   requireStorage();
-  await cloudinary.uploader.destroy(publicId, {
-    resource_type: resourceType || 'image',
-    type: deliveryType || 'upload',
-    invalidate: true
+
+  const objectPath = normalizeObjectPath(publicId);
+  const endpoint = `${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucketName)}/${objectPath}`;
+
+  const response = await fetch(endpoint, {
+    method: 'DELETE',
+    headers: storageHeaders()
   });
+
+  if (!response.ok && response.status !== 404) {
+    const responseText = await response.text();
+    const error = new Error(`Supabase Storage delete failed (${response.status}): ${responseText.slice(0, 500)}`);
+    error.status = response.status;
+    throw error;
+  }
 }
 
-export function getStoredAssetUrl(url, publicId, resourceType = 'image', deliveryType = 'upload') {
+function getPublicObjectUrl(objectPath) {
+  return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(bucketName)}/${objectPath}`;
+}
+
+export function getStoredAssetUrl(url, publicId) {
   if (url) return url;
-  if (!publicId) return null;
-  return cloudinary.url(publicId, { secure: true, resource_type: resourceType || 'image', type: deliveryType || 'upload' });
+  if (!publicId || !isStorageConfigured()) return null;
+  return getPublicObjectUrl(normalizeObjectPath(publicId));
 }
 
-export function getCloudinaryClient() {
-  return cloudinary;
+export function getSupabaseStorageConfig() {
+  return {
+    url: supabaseUrl,
+    bucket: bucketName
+  };
 }
