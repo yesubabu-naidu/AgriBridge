@@ -65,8 +65,34 @@ router.put('/applications/:id/status', authenticateToken, authorizeRoles('landow
 
 router.get('/earnings', authenticateToken, authorizeRoles('landowner'), async (req, res) => {
   try {
-    const earnings = await query(`SELECT les.*, ${landLabel}, l.location, ${farmerName} AS farmer_name FROM leases les JOIN lands l ON les.land_id = l.id JOIN users u ON les.farmer_id = u.id WHERE les.owner_id = ? AND les.payment_status = 'paid'`, [req.user.id]);
-    return res.json({ success: true, data: earnings });
+    const [transactions, pending] = await Promise.all([
+      query(
+        `SELECT t.*, l.land_name, l.location, u.full_name AS farmer_name, u.email AS farmer_email
+         FROM transactions t
+         LEFT JOIN leases les ON t.reference_id = CONCAT('LEASE-', les.id)
+         LEFT JOIN lands l ON les.land_id = l.id
+         LEFT JOIN users u ON les.farmer_id = u.id
+         WHERE t.user_id = ? AND t.type = 'lease_payment' AND t.status = 'successful'
+         ORDER BY t.created_at DESC`,
+        [req.user.id]
+      ),
+      query(
+        `SELECT COALESCE(SUM(les.annual_price), 0) AS value
+         FROM leases les
+         WHERE les.owner_id = ? AND les.payment_status = 'pending' AND les.status = 'active'`,
+        [req.user.id]
+      )
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        transactions,
+        total_earnings: transactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0),
+        pending_earnings: Number(pending[0]?.value || 0),
+        completed_payouts: transactions.length
+      }
+    });
   } catch (error) { return errorResponse(res, error); }
 });
 

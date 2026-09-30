@@ -10,9 +10,7 @@ export default function Earnings() {
   const [pendingEarnings, setPendingEarnings] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  const savedUser = localStorage.getItem('agribridge_user');
-  const user = savedUser ? JSON.parse(savedUser) : null;
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadEarningsData();
@@ -20,39 +18,24 @@ export default function Earnings() {
 
   const loadEarningsData = async () => {
     setLoading(true);
-    const transactions = await api.getTransactions();
-    const leases = await api.getFarmerLeases();
-
-    // Filter transactions associated with this landowner's properties
-    const landTransactions = transactions.filter(t => t.type === 'lease_payment');
-
-    if (user) {
-      // Filter for this specific landowner
-      const myPayouts = landTransactions.filter(t => 
-        (t.owner_email && t.owner_email.toLowerCase() === user.email.toLowerCase()) ||
-        (t.owner_name && t.owner_name.toLowerCase() === user.full_name.toLowerCase()) ||
-        (t.user_id === user.id)
-      );
-
-      const total = myPayouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      const pendingLeases = leases.filter(l => 
-        (l.owner_name && l.owner_name.toLowerCase() === user.full_name.toLowerCase()) && 
-        l.payment_status === 'pending'
-      );
-      const pendingSum = pendingLeases.reduce((sum, l) => sum + Number(l.annual_price || 0), 0);
-
-      setPayouts(myPayouts);
-      setTotalEarnings(total);
-      setPendingEarnings(pendingSum);
-      setCompletedCount(myPayouts.length);
-    } else {
+    setError('');
+    try {
+      const data = await api.getLandownerEarnings();
+      const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+      setPayouts(transactions);
+      setTotalEarnings(Number(data.total_earnings || 0));
+      setPendingEarnings(Number(data.pending_earnings || 0));
+      setCompletedCount(Number(data.completed_payouts || transactions.length));
+    } catch (err) {
+      console.error('Failed to load landowner earnings:', err);
       setPayouts([]);
       setTotalEarnings(0);
       setPendingEarnings(0);
       setCompletedCount(0);
+      setError(err.message || 'Unable to load earnings.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -77,6 +60,11 @@ export default function Earnings() {
 
       {loading ? (
         <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
+      ) : error ? (
+        <div className="alert alert-danger d-flex justify-content-between align-items-center">
+          <span>{error}</span>
+          <button className="btn btn-sm btn-outline-danger" onClick={loadEarningsData}>Retry</button>
+        </div>
       ) : payouts.length === 0 ? (
         <EmptyState
           icon="bi-wallet2"
@@ -90,8 +78,9 @@ export default function Earnings() {
             <table className="table align-middle">
               <thead>
                 <tr className="text-muted small">
-                  <th>Payout Ref</th>
-                  <th>Description</th>
+                  <th>Payment Ref</th>
+                  <th>Land</th>
+                  <th>Farmer</th>
                   <th>Payment Method</th>
                   <th>Amount</th>
                   <th>Date</th>
@@ -99,13 +88,14 @@ export default function Earnings() {
                 </tr>
               </thead>
               <tbody>
-                {payouts.map(p => (
-                  <tr key={p.id}>
+                {payouts.map((p) => (
+                  <tr key={p.id || p.transaction_id}>
                     <td className="fw-bold font-monospace">{p.transaction_id || `PAY-${p.id}`}</td>
-                    <td>{p.description || 'Land Lease Rent Payment'}</td>
+                    <td>{p.land_name || 'Land Lease'}</td>
+                    <td>{p.farmer_name || p.farmer_email || 'Farmer'}</td>
                     <td>{p.payment_method || 'UPI / Bank Transfer'}</td>
-                    <td className="fw-bold text-success">₹{Number(p.amount).toLocaleString()}</td>
-                    <td className="small text-muted">{p.created_at || new Date().toISOString().split('T')[0]}</td>
+                    <td className="fw-bold text-success">₹{Number(p.amount || 0).toLocaleString()}</td>
+                    <td className="small text-muted">{p.created_at ? new Date(p.created_at).toLocaleString() : '-'}</td>
                     <td><StatusBadge status={p.status || 'successful'} /></td>
                   </tr>
                 ))}

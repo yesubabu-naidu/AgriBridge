@@ -176,7 +176,21 @@ router.post("/payment", authenticateToken, authorizeRoles("farmer"), async (req,
       if (!paid.affectedRows) { const error = new Error("This lease payment was already processed."); error.status = 409; throw error; }
       const txId = "AGRI-" + Date.now() + "-" + crypto.randomBytes(5).toString("hex");
       await tx("INSERT INTO payments (reference_type, reference_id, payer_id, amount, payment_method, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)", ["lease", leaseId, req.user.id, amount, paymentMethod, "successful", txId]);
+      // Record the farmer's debit transaction.
       await tx("INSERT INTO transactions (transaction_id, user_id, type, amount, payment_method, status, reference_id, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [txId, req.user.id, "lease_payment", amount, paymentMethod, "successful", "LEASE-" + leaseId, "Lease fee payment"]);
+
+      // Record the matching landowner credit using the same lease payment.
+      // The transactions table is user-owned, so the landowner receives a
+      // separate row rather than sharing the farmer's transaction row.
+      const ownerRows = await tx("SELECT owner_id FROM leases WHERE id = ?", [leaseId]);
+      const ownerId = ownerRows[0]?.owner_id;
+      if (!ownerId) {
+        throw Object.assign(new Error("Unable to resolve the landowner for this lease."), { status: 500 });
+      }
+
+      const ownerTxId = txId + "-OWNER";
+      await tx("INSERT INTO transactions (transaction_id, user_id, type, amount, payment_method, status, reference_id, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [ownerTxId, ownerId, "lease_payment", amount, paymentMethod, "successful", "LEASE-" + leaseId, "Lease payment received for land"]) ;
+
       return { transaction_id: txId, amount, status: "successful" };
     });
     return res.json({ success: true, message: "Payment completed successfully", data: payment });
