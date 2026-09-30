@@ -553,7 +553,7 @@ export function createAuthRouter({
       // Store new OTP in PostgreSQL
       await dbQuery(
         `INSERT INTO verification_codes
-         (email, purpose, otp_hash, expires_at)
+         (email, purpose, code_hash, expires_at)
          VALUES (?, ?, ?, ?)`,
         [
           email,
@@ -635,7 +635,7 @@ export function createAuthRouter({
       const rows = await dbQuery(
         `SELECT
            id,
-           otp_hash,
+           code_hash,
            expires_at
          FROM verification_codes
          WHERE email = ?
@@ -678,7 +678,7 @@ export function createAuthRouter({
       if (
         !validOtp(
           otp,
-          record.otp_hash
+          record.code_hash
         )
       ) {
         return res.status(400).json({
@@ -845,7 +845,7 @@ export function createAuthRouter({
         // Store new OTP in PostgreSQL
         await dbQuery(
           `INSERT INTO verification_codes
-           (email, purpose, otp_hash, expires_at)
+           (email, purpose, code_hash, expires_at)
            VALUES (?, ?, ?, ?)`,
           [
             email,
@@ -927,7 +927,7 @@ export function createAuthRouter({
           await dbQuery(
             `SELECT
                id,
-               otp_hash,
+               code_hash,
                expires_at
              FROM verification_codes
              WHERE email = ?
@@ -970,7 +970,7 @@ export function createAuthRouter({
         if (
           !validOtp(
             otp,
-            record.otp_hash
+            record.code_hash
           )
         ) {
           return res.status(400).json({
