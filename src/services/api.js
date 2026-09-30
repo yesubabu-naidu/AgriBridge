@@ -694,7 +694,88 @@ export const api = {
     const ownedTransactions = transactionsStore.filter(tx => belongsToUser(tx, user, 'user_id', ['user_email']));
     const res = await fetchWithFallback('/farmer/transactions', { method: 'GET' }, ownedTransactions);
     return Array.isArray(res.data) ? res.data : ownedTransactions
-  },
+  },async getLandownerEarnings() {
+  transactionsStore = getStoredItem('agribridge_transactions', []);
+
+  const user = getCurrentUser();
+
+  const ownedTransactions = transactionsStore.filter(
+    tx =>
+      belongsToUser(tx, user, 'user_id', ['user_email']) &&
+      (
+        tx.type === 'lease_payment' ||
+        tx.type === 'payout'
+      )
+  );
+
+  try {
+    const res = await fetchWithFallback(
+      '/landowner/earnings',
+      { method: 'GET' },
+      ownedTransactions
+    );
+
+    if (res?.isMock) {
+      const leasePayments = ownedTransactions.filter(
+        tx =>
+          tx.type === 'lease_payment' &&
+          tx.status === 'successful'
+      );
+
+      const payouts = ownedTransactions.filter(
+        tx =>
+          tx.type === 'payout' &&
+          tx.status === 'successful'
+      );
+
+      return {
+        success: true,
+        data: {
+          total_earnings: leasePayments.reduce(
+            (sum, tx) => sum + Number(tx.amount || 0),
+            0
+          ),
+
+          pending_payments: ownedTransactions
+            .filter(
+              tx =>
+                tx.type === 'lease_payment' &&
+                ['pending', 'processing'].includes(
+                  String(tx.status || '').toLowerCase()
+                )
+            )
+            .reduce(
+              (sum, tx) => sum + Number(tx.amount || 0),
+              0
+            ),
+
+          completed_payouts: payouts.length,
+
+          transactions: ownedTransactions
+        }
+      };
+    }
+
+    return res;
+  } catch (error) {
+    console.error(
+      'Failed to load landowner earnings:',
+      error
+    );
+
+    return {
+      success: false,
+      data: {
+        total_earnings: 0,
+        pending_payments: 0,
+        completed_payouts: 0,
+        transactions: []
+      },
+      message:
+        error.message || 'Unable to load earnings.'
+    };
+  }
+},
 
   async getOrders() {
     ordersStore = getStoredItem('agribridge_orders', []);
