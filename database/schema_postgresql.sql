@@ -18,7 +18,13 @@ CREATE TABLE IF NOT EXISTS users (
   avatar VARCHAR(255) DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
   status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending')),
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  avatar_cloudinary_public_id VARCHAR(512),
+  avatar_cloudinary_resource_type VARCHAR(32),
+  avatar_original_file_name VARCHAR(255),
+  avatar_mime_type VARCHAR(100),
+  avatar_file_size BIGINT,
+  avatar_storage_provider VARCHAR(20)
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -58,6 +64,13 @@ CREATE TABLE IF NOT EXISTS landowner_profiles (
   verification_status VARCHAR(20) DEFAULT 'pending' CHECK (verification_status IN ('verified', 'pending', 'rejected')),
   id_proof_type VARCHAR(50),
   id_proof_number VARCHAR(50),
+  id_proof_url TEXT,
+  id_proof_cloudinary_public_id VARCHAR(512),
+  id_proof_cloudinary_resource_type VARCHAR(32),
+  id_proof_original_file_name VARCHAR(255),
+  id_proof_mime_type VARCHAR(100),
+  id_proof_file_size BIGINT,
+  id_proof_storage_provider VARCHAR(20),
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -94,6 +107,12 @@ CREATE TABLE IF NOT EXISTS land_images (
   id SERIAL PRIMARY KEY,
   land_id INT NOT NULL REFERENCES lands(id) ON DELETE CASCADE,
   image_url TEXT NOT NULL,
+  cloudinary_public_id VARCHAR(512),
+  cloudinary_resource_type VARCHAR(32),
+  original_file_name VARCHAR(255),
+  mime_type VARCHAR(100),
+  file_size BIGINT,
+  storage_provider VARCHAR(20),
   is_primary BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -140,6 +159,12 @@ CREATE TABLE IF NOT EXISTS products (
   rating NUMERIC(3,2) DEFAULT 4.90,
   description TEXT,
   status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'out_of_stock', 'unlisted')),
+  image_cloudinary_public_id VARCHAR(512),
+  image_cloudinary_resource_type VARCHAR(32),
+  image_original_file_name VARCHAR(255),
+  image_mime_type VARCHAR(100),
+  image_file_size BIGINT,
+  image_storage_provider VARCHAR(20),
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -258,14 +283,16 @@ CREATE TABLE IF NOT EXISTS farmer_agricultural_context (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 18. WEATHER FORECAST CACHE
-CREATE TABLE IF NOT EXISTS weather_cache (
+-- 18. VERIFICATION CODES
+CREATE TABLE IF NOT EXISTS verification_codes (
   id SERIAL PRIMARY KEY,
-  location VARCHAR(150) NOT NULL,
-  latitude NUMERIC(10,7) NOT NULL,
-  longitude NUMERIC(10,7) NOT NULL,
-  forecast_json TEXT NOT NULL,
-  ai_analysis_json TEXT,
-  fetched_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMPTZ NOT NULL
+  email VARCHAR(100) NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  purpose VARCHAR(50) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  attempts INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_verification_email_purpose ON verification_codes(email, purpose);
+

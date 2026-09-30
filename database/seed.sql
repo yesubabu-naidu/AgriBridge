@@ -60,11 +60,7 @@ INSERT INTO leases (id, application_id, land_id, farmer_id, owner_id, start_date
 INSERT INTO products (id, farmer_id, product_name, category, price_per_unit, unit, available_qty, location, image_url, rating, description, status) VALUES
 (1, 1, 'Organic Sona Masoori Rice', 'Grains', 65.00, 'kg', 1200.00, 'Ongole', 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600', 4.90, 'Freshly harvested unpolished organic rice direct from farm.', 'available'),
 (2, 5, 'Guntur Red Chilli (Teja)', 'Spices', 210.00, 'kg', 450.00, 'Guntur', 'https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?w=600', 4.95, 'High pungency premium quality Guntur red chillies.', 'available'),
-(3, 1, 'Fresh Farm Tomatoes', 'Vegetables', 28.00, 'kg', 800.00, 'Ongole', 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600', 4.80, 'Vine-ripened pesticide-free farm fresh tomatoes.', 'available'),
-<<<<<<< HEAD
 (4, 5, 'Yellow Corn Maize', 'Grains', 34.00, 'kg', 2500.00, 'Guntur', 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=600', 4.75, 'High grade dried yellow corn suitable for feed or flour.', 'available'),
-=======
->>>>>>> e4e5f45 (added new features to project)
 (5, 1, 'Raw Organic Cotton', 'Fiber', 82.00, 'kg', 900.00, 'Ongole', 'https://images.unsplash.com/photo-1606041008023-472dfb5e530f?w=600', 4.88, 'Long-staple clean white cotton bales.', 'available');
 
 -- 10. CART

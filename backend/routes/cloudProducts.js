@@ -23,7 +23,7 @@ async function listProducts(req, res, ownerId = null) {
   const statusClause = ownerId ? "" : " AND LOWER(TRIM(p.status)) = " + String.fromCharCode(39) + "available" + String.fromCharCode(39) + " AND p.available_qty > 0";
   const params = ownerId ? [ownerId] : [];
   const products = await query(
-    `SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.name, ''), u.full_name) AS farmer_name, u.email AS farmer_email, u.phone AS farmer_phone
+    `SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.full_name, ''), u.email) AS farmer_name, u.email AS farmer_email, u.phone AS farmer_phone
      FROM products p JOIN users u ON p.farmer_id = u.id
      WHERE 1 = 1${statusClause}${ownerClause} ORDER BY p.created_at DESC`,
     params

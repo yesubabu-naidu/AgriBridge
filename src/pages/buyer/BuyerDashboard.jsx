@@ -26,29 +26,29 @@ export default function BuyerDashboard() {
 
   return (
     <div className="buyer-dashboard">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
         <div>
           <span className="eyebrow">BUYER WORKSPACE</span>
-          <h2 className="fw-black mb-1">Welcome, Buyer! 🌾</h2>
-          <p className="text-muted small">Browse farm produce, manage orders, and track deliveries.</p>
+          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Welcome, Buyer! 🌾</h2>
+          <p className="text-muted small mb-0">Browse farm produce, manage orders, and track deliveries.</p>
         </div>
-        <Link to="/buyer/marketplace" className="btn btn-success">
+        <Link to="/buyer/marketplace" className="btn btn-success w-100 w-sm-auto text-center">
           <i className="bi bi-shop me-1"></i> Produce Store
         </Link>
       </div>
 
       {/* Stats */}
-      <div className="row g-3 mb-4">
-        <div className="col-lg-3 col-md-6">
+      <div className="row g-2 g-sm-3 mb-4">
+        <div className="col-6 col-lg-3">
           <StatCard title="Total Orders" value={stats.total_orders} icon="bi-bag-check" color="primary" />
         </div>
-        <div className="col-lg-3 col-md-6">
+        <div className="col-6 col-lg-3">
           <StatCard title="Completed Orders" value={stats.completed_orders} icon="bi-check-circle" color="success" />
         </div>
-        <div className="col-lg-3 col-md-6">
+        <div className="col-6 col-lg-3">
           <StatCard title="Pending Orders" value={stats.pending_orders} icon="bi-hourglass-split" color="warning" />
         </div>
-        <div className="col-lg-3 col-md-6">
+        <div className="col-6 col-lg-3">
           <StatCard title="Total Spending" value={`₹${Number(stats.total_spending).toLocaleString()}`} icon="bi-wallet2" color="info" />
         </div>
       </div>

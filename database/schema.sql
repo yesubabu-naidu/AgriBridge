@@ -184,18 +184,10 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_buyer_order (buyer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 12. ORDER ITEMS
 CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   order_id INT NOT NULL,
   product_id INT NOT NULL,
-<<<<<<< HEAD
-  quantity DECIMAL(10,2) NOT NULL,
-  unit_price DECIMAL(10,2) NOT NULL,
-  subtotal DECIMAL(12,2) NOT NULL,
-  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-=======
   farmer_id INT NOT NULL,
   crop_name VARCHAR(120) NOT NULL,
   quantity_kg DECIMAL(10,2) NOT NULL,
@@ -204,7 +196,6 @@ CREATE TABLE IF NOT EXISTS order_items (
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
   FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE
->>>>>>> e4e5f45 (added new features to project)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 13. PAYMENTS
@@ -448,19 +439,18 @@ CREATE TABLE IF NOT EXISTS farmer_agricultural_context (
   FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 30. WEATHER FORECAST CACHE
-CREATE TABLE IF NOT EXISTS weather_cache (
+-- 30. VERIFICATION CODES
+CREATE TABLE IF NOT EXISTS verification_codes (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  location VARCHAR(150) NOT NULL,
-  latitude DECIMAL(10,7) NOT NULL,
-  longitude DECIMAL(10,7) NOT NULL,
-  forecast_json LONGTEXT NOT NULL,
-  ai_analysis_json LONGTEXT NULL,
-  fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  email VARCHAR(100) NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  purpose VARCHAR(50) NOT NULL,
   expires_at TIMESTAMP NOT NULL,
-  INDEX idx_location (location, expires_at),
-  INDEX idx_coords (latitude, longitude)
+  attempts INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_verification_email_purpose (email, purpose)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 
 
 

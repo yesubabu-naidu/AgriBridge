@@ -13,7 +13,6 @@ import cloudProductRoutes from './routes/cloudProducts.js';
 import adminRoutes from './routes/admin.js';
 import irrigationRoutes from './routes/irrigation.js';
 import aiRoutes from './routes/ai.js';
-import weatherRoutes from './routes/weather.js';
 import { authenticateToken, authorizeRoles } from './middleware/auth.js';
 import { guardFarmerData } from './middleware/farmerDataGuard.js';
 
@@ -41,7 +40,6 @@ app.use('/api/buyer', buyerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/irrigation', authenticateToken, authorizeRoles('farmer'), guardFarmerData, irrigationRoutes);
 app.use('/api/ai', authenticateToken, authorizeRoles('farmer'), guardFarmerData, aiRoutes);
-app.use('/api/weather', weatherRoutes);
 app.get('/api/health', (req, res) => res.json({ success: true, message: 'AgriBridge API is healthy.', timestamp: new Date().toISOString() }));
 app.use((req, res) => res.status(404).json({ success: false, message: 'API route not found.' }));
 app.use((error, req, res, next) => { console.error('Unhandled request error:', error.message); const fileError = error.code === 'LIMIT_FILE_SIZE' || error.code === 'INVALID_FILE_TYPE'; res.status(fileError ? 400 : 500).json({ success: false, message: error.code === 'LIMIT_FILE_SIZE' ? 'File is too large.' : error.code === 'INVALID_FILE_TYPE' ? error.message : 'Internal server error.' }); });

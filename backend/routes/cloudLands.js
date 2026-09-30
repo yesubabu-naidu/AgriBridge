@@ -6,7 +6,7 @@ import { deleteObject, getStoredAssetUrl, makePublicId, uploadBuffer, validateUp
 import { LAND_SELECT, normalizeLandInput } from '../services/landSchema.js';
 
 const router = express.Router();
-const ownerName = "COALESCE(NULLIF(u.name, ''), u.full_name)";
+const ownerName = "COALESCE(NULLIF(u.full_name, ''), u.email)";
 
 function fail(res, error) {
   console.error('Land database request failed:', error.message);
@@ -14,13 +14,25 @@ function fail(res, error) {
 }
 
 async function attachImages(land) {
-  const rows = await query('SELECT id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, is_primary FROM land_images WHERE land_id = ? ORDER BY is_primary DESC, id ASC', [land.id]);
-  const urls = [land.image_url, ...rows.map((image) => getStoredAssetUrl(image.image_url, image.cloudinary_public_id, image.cloudinary_resource_type))].filter(Boolean);
+  // Keep the public listing endpoint compatible with older PostgreSQL schemas.
+  // Cloudinary metadata is optional; image_url/is_primary are the canonical fields.
+  const rows = await query(
+    'SELECT * FROM land_images WHERE land_id = ? ORDER BY is_primary DESC, id ASC',
+    [land.id]
+  );
+  const urls = [
+    land.image_url,
+    ...rows.map((image) => getStoredAssetUrl(
+      image.image_url,
+      image.cloudinary_public_id,
+      image.cloudinary_resource_type
+    ))
+  ].filter(Boolean);
   return { ...land, images: [...new Set(urls)], image_metadata: rows };
 }
 
 async function findOwnedLand(id, user) {
-  const rows = await query('SELECT * FROM lands WHERE id = ? AND (landowner_id = ? OR ? = 1)', [id, user.id, user.role === 'admin' ? 1 : 0]);
+  const rows = await query('SELECT * FROM lands WHERE id = ? AND (owner_id = ? OR ? = 1)', [id, user.id, user.role === 'admin' ? 1 : 0]);
   return rows[0] || null;
 }
 
@@ -35,13 +47,13 @@ async function cleanupAssets(assets) {
 router.get('/', async (req, res) => {
   try {
     const { location, land_type, min_acres, max_price, search } = req.query;
-    let sql = `SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.phone AS owner_phone FROM lands l JOIN users u ON l.landowner_id = u.id WHERE LOWER(TRIM(l.status)) IN ('active', 'approved')`;
+    let sql = `SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.phone AS owner_phone FROM lands l JOIN users u ON l.owner_id = u.id WHERE LOWER(TRIM(l.status)) IN ('active', 'approved')`;
     const params = [];
     if (location) { sql += ' AND l.location LIKE ?'; params.push(`%${location}%`); }
-    if (land_type) { sql += ' AND l.land_type LIKE ?'; params.push(`%${land_type}%`); }
-    if (min_acres) { sql += ' AND l.area_acres >= ?'; params.push(Number(min_acres)); }
-    if (max_price) { sql += ' AND l.price_per_year <= ?'; params.push(Number(max_price)); }
-    if (search) { sql += ' AND (l.location LIKE ? OR l.land_type LIKE ? OR l.description LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+    if (land_type) { sql += ' AND (l.land_name LIKE ? OR l.soil_type LIKE ?)'; params.push(`%${land_type}%`, `%${land_type}%`); }
+    if (min_acres) { sql += ' AND l.acres >= ?'; params.push(Number(min_acres)); }
+    if (max_price) { sql += ' AND l.lease_price <= ?'; params.push(Number(max_price)); }
+    if (search) { sql += ' AND (l.location LIKE ? OR l.land_name LIKE ? OR l.description LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
     sql += ' ORDER BY l.created_at DESC';
     const lands = await query(sql, params);
     return res.json({ success: true, data: await Promise.all(lands.map(attachImages)) });
@@ -50,7 +62,7 @@ router.get('/', async (req, res) => {
 
 router.get('/mine', authenticateToken, authorizeRoles('landowner'), async (req, res) => {
   try {
-    const lands = await query(`SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.email AS owner_email, u.phone AS owner_phone FROM lands l JOIN users u ON l.landowner_id = u.id WHERE l.landowner_id = ? ORDER BY l.created_at DESC`, [req.user.id]);
+    const lands = await query(`SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.email AS owner_email, u.phone AS owner_phone FROM lands l JOIN users u ON l.owner_id = u.id WHERE l.owner_id = ? ORDER BY l.created_at DESC`, [req.user.id]);
     return res.json({ success: true, data: await Promise.all(lands.map(attachImages)) });
   } catch (error) { return fail(res, error); }
 });
@@ -60,14 +72,14 @@ router.get('/owner/:ownerId', authenticateToken, async (req, res) => {
   if (!Number.isInteger(ownerId) || ownerId <= 0) return res.status(400).json({ success: false, message: 'Invalid landowner id.' });
   if (req.user.id !== ownerId && req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'You may only view your own land listings.' });
   try {
-    const lands = await query(`SELECT ${LAND_SELECT} FROM lands l WHERE l.landowner_id = ? ORDER BY l.created_at DESC`, [ownerId]);
+    const lands = await query(`SELECT ${LAND_SELECT} FROM lands l WHERE l.owner_id = ? ORDER BY l.created_at DESC`, [ownerId]);
     return res.json({ success: true, data: await Promise.all(lands.map(attachImages)) });
   } catch (error) { return fail(res, error); }
 });
 
 router.get('/:id', async (req, res) => {
   try {
-    const rows = await query(`SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.email AS owner_email, u.phone AS owner_phone FROM lands l JOIN users u ON l.landowner_id = u.id WHERE l.id = ?`, [req.params.id]);
+    const rows = await query(`SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.email AS owner_email, u.phone AS owner_phone FROM lands l JOIN users u ON l.owner_id = u.id WHERE l.id = ?`, [req.params.id]);
     if (!rows.length) return res.status(404).json({ success: false, message: 'Land listing not found' });
     return res.json({ success: true, data: await attachImages(rows[0]) });
   } catch (error) { return fail(res, error); }
@@ -79,22 +91,23 @@ router.post('/', authenticateToken, authorizeRoles('landowner', 'admin'), upload
     const input = normalizeLandInput(req.body);
     const imageUrl = String(req.body.image_url || '').trim();
     if (imageUrl && !/^https:\/\//i.test(imageUrl)) return res.status(400).json({ success: false, message: 'Use a file upload or a valid HTTPS image URL.' });
-   const result = await query(
-  `INSERT INTO lands
-   (landowner_id, land_type, location, district, state, area_acres, soil_type, water_source, price_per_year)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  [
-    req.user.id,
-    input.land_type,
-    input.location,
-    req.body.district || '',
-    req.body.state || '',
-    input.area_acres,
-    req.body.soil_type || '',
-    req.body.water_source || '',
-    input.price_per_year
-  ]
-);
+    const result = await query(
+      `INSERT INTO lands
+       (owner_id, land_name, location, district, state, acres, soil_type, water_source, lease_price, description, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved')`,
+      [
+        req.user.id,
+        input.land_name,
+        input.location,
+        req.body.district || '',
+        req.body.state || '',
+        input.acres,
+        req.body.soil_type || 'Loamy',
+        req.body.water_source || 'Borewell',
+        input.lease_price,
+        input.description || ''
+      ]
+    );
     const landId = result.insertId;
     if (req.file) {
       validateUpload(req.file);
@@ -111,12 +124,12 @@ router.put('/:id', authenticateToken, authorizeRoles('landowner', 'admin'), uplo
   try {
     const land = await findOwnedLand(req.params.id, req.user);
     if (!land) return res.status(404).json({ success: false, message: 'Land listing not found for your account.' });
-    const input = normalizeLandInput({ land_type: req.body.land_type ?? req.body.land_name ?? land.land_type, location: req.body.location ?? land.location, area_acres: req.body.area_acres ?? req.body.acres ?? land.area_acres, price_per_year: req.body.price_per_year ?? req.body.lease_price ?? req.body.price_per_acre ?? land.price_per_year, description: req.body.description ?? land.description });
-    await query('UPDATE lands SET location = ?, land_type = ?, area_acres = ?, price_per_year = ?, description = ? WHERE id = ?', [input.location, input.land_type, input.area_acres, input.price_per_year, input.description || null, land.id]);
+    const input = normalizeLandInput({ land_name: req.body.land_name ?? req.body.land_type ?? land.land_name, location: req.body.location ?? land.location, acres: req.body.acres ?? req.body.area_acres ?? land.acres, lease_price: req.body.lease_price ?? req.body.price_per_year ?? req.body.price_per_acre ?? land.lease_price, description: req.body.description ?? land.description });
+    await query('UPDATE lands SET location = ?, land_name = ?, acres = ?, lease_price = ?, description = ? WHERE id = ?', [input.location, input.land_name, input.acres, input.lease_price, input.description || null, land.id]);
     if (req.file) {
       validateUpload(req.file);
       const existing = await query('SELECT id, cloudinary_public_id, cloudinary_resource_type FROM land_images WHERE land_id = ? AND is_primary = TRUE ORDER BY id LIMIT 1', [land.id]);
-      uploadedAsset = await uploadBuffer({ publicId: makePublicId({ scope: 'lands', ownerId: land.landowner_id, recordId: land.id, originalName: req.file.originalname }), buffer: req.file.buffer, contentType: req.file.mimetype, originalName: req.file.originalname });
+      uploadedAsset = await uploadBuffer({ publicId: makePublicId({ scope: 'lands', ownerId: land.owner_id, recordId: land.id, originalName: req.file.originalname }), buffer: req.file.buffer, contentType: req.file.mimetype, originalName: req.file.originalname });
       await query('UPDATE lands SET image_url = ? WHERE id = ?', [uploadedAsset.url, land.id]);
       if (existing.length) {
         await query('UPDATE land_images SET image_url = ?, cloudinary_public_id = ?, cloudinary_resource_type = ?, original_file_name = ?, mime_type = ?, file_size = ?, storage_provider = ? WHERE id = ?', [uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'cloudinary', existing[0].id]);

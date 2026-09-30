@@ -50,15 +50,15 @@ export default function ProductCard({ product, onAddToCart }) {
 
         <p className="text-muted small text-truncate mb-3">{product.description}</p>
 
-        <div className="mt-auto d-flex gap-2">
+        <div className="mt-auto d-flex flex-column flex-sm-row gap-2">
           <button 
-            className="btn btn-outline-success btn-sm flex-grow-1"
+            className="btn btn-outline-success btn-sm flex-grow-1 text-nowrap text-center"
             onClick={handleAddToCartClick}
           >
             <i className="bi bi-cart-plus me-1"></i> Add to Cart
           </button>
           <button 
-            className="btn btn-success btn-sm"
+            className="btn btn-success btn-sm text-nowrap text-center"
             onClick={handleBuyNowClick}
           >
             Buy Now

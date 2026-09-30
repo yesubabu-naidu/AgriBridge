@@ -6,7 +6,6 @@ export function classifyQuery(message) {
   const text = (message || '').toLowerCase();
 
   const categories = {
-    WEATHER: ['weather', 'rain', 'temperature', 'humidity', 'forecast', 'rainfall', 'వర్షం', 'వాతావరణం', 'ఎండ', 'రుతుపవనాలు'],
     MARKET_PRICE: ['price', 'rate', 'mandi', 'market', 'cost per quintal', 'selling', 'ధర', 'రేటు', 'మార్కెట్', 'అమ్మకం'],
     FERTILIZER: ['fertilizer', 'urea', 'dap', 'mop', 'npk', 'nitrogen', 'phosphorus', 'potash', 'nutrient', 'ఎరువులు', 'యూరియా', 'డిఎపి'],
     PEST_DISEASE: ['pest', 'disease', 'thrips', 'whitefly', 'blight', 'fungus', 'leaf curl', 'yellowing', 'worm', 'spray', 'pesticide', 'పురుగులు', 'తెగులు', 'ముడత', 'నల్లి', 'మందులు'],
@@ -49,8 +48,7 @@ export function classifyQuery(message) {
     primaryCategory,
     categories: detectedCategories,
     crop: detectedCrop || 'ALL',
-    needsWeather: detectedCategories.includes('WEATHER') || text.includes('irrigate') || text.includes('spray'),
     needsMarket: detectedCategories.includes('MARKET_PRICE'),
-    needsRag: !detectedCategories.includes('WEATHER') && !detectedCategories.includes('MARKET_PRICE')
+    needsRag: !detectedCategories.includes('MARKET_PRICE')
   };
 }

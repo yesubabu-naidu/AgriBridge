@@ -47,18 +47,6 @@ export async function query(sql, params = []) {
   }
 }
 
-(async () => {
-  try {
-    if (isPostgres) {
-      await pgPool.query('CREATE TABLE IF NOT EXISTS weather_cache (id SERIAL PRIMARY KEY, location VARCHAR(150) NOT NULL, latitude NUMERIC(10,7) NOT NULL, longitude NUMERIC(10,7) NOT NULL, forecast_json TEXT NOT NULL, ai_analysis_json TEXT NULL, fetched_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMPTZ NOT NULL)');
-    } else {
-      await mysqlPool.query('CREATE TABLE IF NOT EXISTS weather_cache (id INT AUTO_INCREMENT PRIMARY KEY, location VARCHAR(150) NOT NULL, latitude DECIMAL(10,7) NOT NULL, longitude DECIMAL(10,7) NOT NULL, forecast_json LONGTEXT NOT NULL, ai_analysis_json LONGTEXT NULL, fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP NOT NULL, INDEX idx_location (location, expires_at), INDEX idx_coords (latitude, longitude)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-    }
-  } catch (error) {
-    console.error('Weather cache initialization failed:', error.message);
-  }
-})();
-
 export async function withTransaction(work) {
   const connection = isPostgres ? await pgPool.connect() : await mysqlPool.getConnection();
   const transactionQuery = async (sql, params = []) => {

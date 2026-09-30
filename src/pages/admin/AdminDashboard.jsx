@@ -22,48 +22,48 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-dashboard">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
         <div>
           <span className="eyebrow">SYSTEM CONTROL</span>
-          <h2 className="fw-black mb-1">Admin Operations Center 🛡️</h2>
-          <p className="text-muted small">Monitor platform-wide users, land moderation, transactions, and system health.</p>
+          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Admin Operations Center 🛡️</h2>
+          <p className="text-muted small mb-0">Monitor platform-wide users, land moderation, transactions, and system health.</p>
         </div>
       </div>
 
       {/* Metrics Row */}
-      <div className="row g-3 mb-4">
-        <div className="col-lg-3 col-md-6">
+      <div className="row g-2 g-sm-3 mb-4">
+        <div className="col-6 col-lg-3">
           <StatCard title="Total Registered Users" value={stats.total_users} icon="bi-people" color="primary" />
         </div>
-        <div className="col-lg-3 col-md-6">
-          <StatCard title="Total Farmland Listings" value={stats.total_lands} icon="bi-map" color="success" />
+        <div className="col-6 col-lg-3">
+          <StatCard title="Farmland Listings" value={stats.total_lands} icon="bi-map" color="success" />
         </div>
-        <div className="col-lg-3 col-md-6">
-          <StatCard title="Total Platform Revenue" value={`₹${Number(stats.total_revenue).toLocaleString()}`} icon="bi-bank" color="info" />
+        <div className="col-6 col-lg-3">
+          <StatCard title="Platform Revenue" value={`₹${Number(stats.total_revenue).toLocaleString()}`} icon="bi-bank" color="info" />
         </div>
-        <div className="col-lg-3 col-md-6">
-          <StatCard title="Total System Orders" value={stats.total_orders} icon="bi-bag-check" color="warning" />
+        <div className="col-6 col-lg-3">
+          <StatCard title="System Orders" value={stats.total_orders} icon="bi-bag-check" color="warning" />
         </div>
       </div>
 
       {/* User Demographics Breakdown */}
-      <div className="row g-4 mb-4">
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white text-center">
+      <div className="row g-2 g-sm-3 mb-4">
+        <div className="col-12 col-md-4">
+          <div className="card border-0 shadow-sm rounded-4 p-3 p-sm-4 bg-white text-center">
             <h6 className="text-muted small fw-bold">Farmers</h6>
-            <h2 className="fw-black text-success">{stats.total_farmers}</h2>
+            <h2 className="fw-black text-success fs-3 mb-0">{stats.total_farmers}</h2>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white text-center">
+        <div className="col-12 col-md-4">
+          <div className="card border-0 shadow-sm rounded-4 p-3 p-sm-4 bg-white text-center">
             <h6 className="text-muted small fw-bold">Landowners</h6>
-            <h2 className="fw-black text-primary">{stats.total_landowners}</h2>
+            <h2 className="fw-black text-primary fs-3 mb-0">{stats.total_landowners}</h2>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm rounded-4 p-4 bg-white text-center">
+        <div className="col-12 col-md-4">
+          <div className="card border-0 shadow-sm rounded-4 p-3 p-sm-4 bg-white text-center">
             <h6 className="text-muted small fw-bold">Produce Buyers</h6>
-            <h2 className="fw-black text-warning">{stats.total_buyers}</h2>
+            <h2 className="fw-black text-warning fs-3 mb-0">{stats.total_buyers}</h2>
           </div>
         </div>
       </div>

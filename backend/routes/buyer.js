@@ -28,7 +28,7 @@ router.get('/products', async (req, res) => {
   try {
     const { category, search } = req.query;
     let sql = `
-      SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.name, ''), u.full_name) AS farmer_name
+      SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.full_name, ''), u.email) AS farmer_name
       FROM products p
       JOIN users u ON p.farmer_id = u.id
       WHERE LOWER(TRIM(p.status)) = 'available'
@@ -56,7 +56,7 @@ router.get('/products', async (req, res) => {
 router.get('/products/:id', async (req, res) => {
   try {
     const products = await query(
-      `SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.name, ''), u.full_name) AS farmer_name, u.phone AS farmer_phone
+      `SELECT p.*, p.available_qty AS quantity, COALESCE(NULLIF(u.full_name, ''), u.email) AS farmer_name, u.phone AS farmer_phone
        FROM products p
        JOIN users u ON p.farmer_id = u.id
        WHERE p.id = ?`,
@@ -97,7 +97,7 @@ router.post("/cart", authenticateToken, authorizeRoles("buyer"), async (req, res
       return res.status(400).json({ success: false, message: "Provide a valid product and quantity." });
     }
     const cart = await withTransaction(async (tx) => {
-      const products = await tx("SELECT id, available_qty FROM products WHERE id = ? AND LOWER(TRIM(order_status)) = ?", [productId, "available"]);
+      const products = await tx("SELECT id, available_qty FROM products WHERE id = ? AND LOWER(TRIM(status)) = ?", [productId, "available"]);
       if (!products.length) { const error = new Error("This crop is unavailable."); error.status = 409; throw error; }
       const current = await tx("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?", [req.user.id, productId]);
       const desiredQty = Number(current[0]?.quantity || 0) + quantity;
@@ -170,11 +170,11 @@ router.post("/orders", authenticateToken, authorizeRoles("buyer"), async (req, r
       const lineItems = [];
       let totalAmount = 0;
       for (const [productId, quantity] of quantities) {
-        const products = await tx("SELECT id, farmer_id, product_name, price_per_unit, available_qty FROM products WHERE id = ? AND LOWER(TRIM(order_status)) = ?", [productId, "available"]);
+        const products = await tx("SELECT id, farmer_id, product_name, price_per_unit, available_qty FROM products WHERE id = ? AND LOWER(TRIM(status)) = ?", [productId, "available"]);
         if (!products.length) { const error = new Error("One or more crops are unavailable."); error.status = 409; throw error; }
         const product = products[0];
         const unitPrice = Number(product.price_per_unit);
-        const stock = await tx("UPDATE products SET available_qty = available_qty - ?, status = CASE WHEN available_qty - ? <= 0 THEN ? ELSE ? END WHERE id = ? AND LOWER(TRIM(order_status)) = ? AND available_qty >= ?", [quantity, quantity, "out_of_stock", "available", productId, "available", quantity]);
+        const stock = await tx("UPDATE products SET available_qty = available_qty - ?, status = CASE WHEN available_qty - ? <= 0 THEN ? ELSE ? END WHERE id = ? AND LOWER(TRIM(status)) = ? AND available_qty >= ?", [quantity, quantity, "out_of_stock", "available", productId, "available", quantity]);
         if (!stock.affectedRows) { const error = new Error("One or more crops no longer have enough stock."); error.status = 409; throw error; }
         lineItems.push({ productId, farmerId: product.farmer_id, quantity, unitPrice, subtotal: unitPrice * quantity, productName: product.product_name });
         totalAmount += unitPrice * quantity;

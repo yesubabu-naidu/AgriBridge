@@ -1,0 +1,140 @@
+/* AgriBridge dropdown / overlay interaction contract.
+ * This file is loaded after styles.css and responsive-fixes.css.
+ * Keep the z-index hierarchy intentional; do not replace it with arbitrary 999999 values.
+ */
+
+:root {
+  --z-site-nav: 1030;
+  --z-mobile-nav: 1035;
+  --z-ai-fab: 1045;
+  --z-sidebar-overlay: 1050;
+  --z-sidebar: 1060;
+  --z-dropdown: 1070;
+  --z-modal-backdrop: 1080;
+  --z-modal: 1090;
+  --z-toast: 1100;
+}
+
+.site-nav {
+  z-index: var(--z-site-nav);
+}
+
+.sidebar-overlay {
+  z-index: var(--z-sidebar-overlay) !important;
+  background: rgba(15, 23, 18, 0.42) !important;
+  /* A mobile navigation backdrop must not blur the page. Blur was making controls look disabled. */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sidebar {
+  z-index: var(--z-sidebar) !important;
+}
+
+.mobile-bottom-nav {
+  z-index: var(--z-mobile-nav) !important;
+}
+
+.agri-fab-container {
+  z-index: var(--z-ai-fab) !important;
+}
+
+/* Bootstrap dropdowns */
+.dropdown-menu,
+.dropdown-menu.show {
+  z-index: var(--z-dropdown) !important;
+  pointer-events: auto;
+}
+
+.dropdown-menu .dropdown-item {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+/* Controlled profile dropdown in Navbar.jsx */
+.profile-dropdown {
+  position: relative;
+  z-index: var(--z-dropdown);
+}
+
+.profile-dropdown-menu {
+  position: absolute !important;
+  inset: auto 0 auto auto !important;
+  top: calc(100% + 8px) !important;
+  min-width: 220px;
+  margin: 0 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+.profile-dropdown-menu .dropdown-item {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Native selects must stay native and interactive. */
+select.form-select,
+.form-select {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+/* Never blur a select/dropdown because another component is open. */
+.form-select:focus,
+.form-control:focus {
+  filter: none !important;
+}
+
+/* The drawer is the only component allowed to use the mobile backdrop. */
+body.mobile-sidebar-open .sidebar-overlay {
+  display: block;
+}
+
+@media (max-width: 991.98px) {
+  .profile-dropdown-label {
+    max-width: min(42vw, 180px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-dropdown-menu {
+    position: fixed !important;
+    top: auto !important;
+    right: 10px !important;
+    bottom: calc(var(--mobile-nav-height, 66px) + 10px + env(safe-area-inset-bottom, 0px)) !important;
+    left: auto !important;
+    width: min(260px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+    max-height: min(70dvh, 420px);
+    overflow-y: auto;
+  }
+
+  /* While the mobile sidebar is open, the main content is intentionally inert.
+     Dropdowns in the drawer itself remain above the drawer surface. */
+  body.mobile-sidebar-open .sidebar {
+    z-index: var(--z-sidebar) !important;
+  }
+
+  body.mobile-sidebar-open .sidebar .dropdown-menu,
+  body.mobile-sidebar-open .sidebar .dropdown-menu.show {
+    z-index: calc(var(--z-sidebar) + 10) !important;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .profile-dropdown-menu {
+    right: 8px !important;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+  }
+}

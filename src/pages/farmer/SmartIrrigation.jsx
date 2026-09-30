@@ -234,7 +234,7 @@ export default function SmartIrrigation() {
         <div className="alert alert-info border-info d-flex align-items-center gap-3 mb-4 p-3">
           <i className="bi bi-cloud-rain-heavy-fill fs-3 text-primary flex-shrink-0"></i>
           <div className="extra-small">
-            <strong className="d-block text-primary fs-6 mb-1">🌧️ Heavy Rainfall Forecast Warning ({formData.rain_probability}%)</strong>
+            <strong className="d-block text-primary fs-6 mb-1">🌧️ Heavy Rainfall Warning ({formData.rain_probability}%)</strong>
             Precipitation likelihood is high over the next 24 hours. Hold off automated irrigation to prevent waterlogging.
           </div>
         </div>
@@ -384,7 +384,7 @@ export default function SmartIrrigation() {
                     🌧️ Irrigation Not Required
                   </h3>
                   <p className="text-secondary small mb-3">
-                    {recommendation ? recommendation.reason_text : 'Soil moisture is optimal and rainfall is forecasted.'}
+                    {recommendation ? recommendation.reason_text : 'Soil moisture is optimal and rainfall is expected.'}
                   </p>
                 </div>
               )}

@@ -47,9 +47,10 @@ export default function MobileNav({ role }) {
   return (
     <nav className="mobile-bottom-nav">
       {getLinks().map(([path, label, icon]) => {
-        const isActive = location.pathname === path;
+        const isActive = location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`));
         return (
-          <Link key={path} to={path} className={isActive ? 'active' : ''}>
+          <Link key={path} to={path} className={isActive ? 'active' : ''}
+            aria-current={isActive ? 'page' : undefined}>
             <i className={`bi ${icon}`}></i>
             <span>{label}</span>
           </Link>

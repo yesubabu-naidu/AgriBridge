@@ -892,7 +892,6 @@ export const api = {
       sources: [
         { title: 'Paddy Fertilizer & NPK Application Schedule', source: 'ICAR National Rice Research Institute & PJTSAU Agronomy Guide', category: 'FERTILIZER' }
       ],
-      usedWeatherData: false,
       usedMarketData: false
     });
     return res;
@@ -932,118 +931,6 @@ export const api = {
     return res.questions || [];
   },
 
-  // 7-DAY WEATHER FORECAST & AI AGRONOMIC ADVISORY APIs
-  async get7DayWeatherForecast({ farmer_id = 1, language = 'en', location, district } = {}) {
-    let queryParams = `?farmer_id=${farmer_id}&language=${language}`;
-    if (location) queryParams += `&location=${encodeURIComponent(location)}`;
-    if (district) queryParams += `&district=${encodeURIComponent(district)}`;
-
-    const cityKey = (location || 'Ongole').toLowerCase();
-    let cityData = {
-      current_temp: 30, max_temp: 32, min_temp: 24, condition: 'Partly Cloudy', icon: 'bi-cloud-sun-fill text-info',
-      humidity: 70, rain_probability: 25, rainfall_mm: 0.0, wind_speed: 12, uv_index: 7, sunrise: '06:05', sunset: '18:30',
-      summary: 'The 7-day outlook indicates warm weather with moderate rain forecast around Tuesday.',
-      irrigation: '🌧️ High rain probability (75%) forecast for Tuesday. Postpone watering to prevent waterlogging.',
-      fertilizer: '🌱 Avoid top-dressing Urea immediately before Tuesday rain to prevent nutrient runoff.',
-      spraying: '🐛 Thursday morning presents the best weather window for foliar pesticide and neem oil spraying.',
-      harvest: '🌾 Plan harvesting activities during consecutive dry days (Friday, Saturday).'
-    };
-
-    if (cityKey.includes('guntur')) {
-      cityData = {
-        current_temp: 33, max_temp: 35, min_temp: 25, condition: 'Partly Cloudy', icon: 'bi-cloud-sun-fill text-info',
-        humidity: 66, rain_probability: 30, rainfall_mm: 2.5, wind_speed: 14, uv_index: 8, sunrise: '06:02', sunset: '18:28',
-        summary: 'Guntur region expects warm weather with moderate humidity (66%). Drip irrigation recommended.',
-        irrigation: '💧 Apply 40 minutes drip irrigation in early morning to prevent moisture stress in Cotton/Chilli fields.',
-        fertilizer: '🌱 Apply NPK top-dressing in early morning before temperatures rise.',
-        spraying: '🐛 Best spraying window: Wednesday morning (wind speed 14 km/h).',
-        harvest: '🌾 Dry window for crop harvesting: Friday & Saturday.'
-      };
-    } else if (cityKey.includes('vijayawada')) {
-      cityData = {
-        current_temp: 34, max_temp: 36, min_temp: 26, condition: 'Humid & Warm', icon: 'bi-sun-fill text-warning',
-        humidity: 72, rain_probability: 40, rainfall_mm: 5.0, wind_speed: 11, uv_index: 8, sunrise: '06:01', sunset: '18:27',
-        summary: 'Vijayawada Krishna canal zone anticipates high humidity (72%) with afternoon cloud cover.',
-        irrigation: '🌊 Canal water flow is stable. Reduce artificial pumping during afternoon hours.',
-        fertilizer: '🌱 Avoid heavy Urea application during peak afternoon heat.',
-        spraying: '🐛 Spray neem oil for whitefly control before 08:30 AM.',
-        harvest: '🌾 Delay paddy harvesting until surface moisture dries post-morning dew.'
-      };
-    } else if (cityKey.includes('kurnool')) {
-      cityData = {
-        current_temp: 36, max_temp: 38, min_temp: 24, condition: 'Dry & Sunny', icon: 'bi-sun-fill text-warning',
-        humidity: 48, rain_probability: 15, rainfall_mm: 0.0, wind_speed: 16, uv_index: 9, sunrise: '06:08', sunset: '18:32',
-        summary: 'Kurnool dry zone expects high temperatures (36°C) and low humidity (48%). Groundnut crops require mulching.',
-        irrigation: '💧 Frequent light irrigation required for Groundnut and Onion crops to combat evapotranspiration.',
-        fertilizer: '🌱 Dissolve soluble fertilizers in drip water (fertigation) during early hours.',
-        spraying: '💨 High wind speed (16 km/h). Avoid spraying during peak winds (11 AM - 3 PM).',
-        harvest: '🌾 Excellent dry harvesting conditions across all 7 days.'
-      };
-    } else if (cityKey.includes('anantapur')) {
-      cityData = {
-        current_temp: 37, max_temp: 39, min_temp: 25, condition: 'Hot & Dry', icon: 'bi-sun-fill text-warning',
-        humidity: 42, rain_probability: 10, rainfall_mm: 0.0, wind_speed: 18, uv_index: 10, sunrise: '06:10', sunset: '18:35',
-        summary: 'Anantapur semi-arid region is experiencing severe heat (37°C) and strong dry winds.',
-        irrigation: '⚠️ High evaporation loss. Irrigate exclusively between 05:30 AM and 07:30 AM.',
-        fertilizer: '🌱 Do not broadcast dry fertilizer; use micro-drip fertigation to prevent root burn.',
-        spraying: '🐛 Spray during late evening (05:30 PM - 07:00 PM) when thermal inversion drops.',
-        harvest: '🌾 Ideal dry conditions for groundnut pod drying and harvesting.'
-      };
-    } else if (cityKey.includes('warangal')) {
-      cityData = {
-        current_temp: 31, max_temp: 33, min_temp: 23, condition: 'Scattered Showers', icon: 'bi-cloud-rain-fill text-primary',
-        humidity: 64, rain_probability: 45, rainfall_mm: 8.5, wind_speed: 13, uv_index: 6, sunrise: '06:04', sunset: '18:29',
-        summary: 'Warangal agricultural zone has 45% rain chance with moderate showers forecast.',
-        irrigation: '🌧️ Rain expected. Postpone scheduled irrigation for 48 hours.',
-        fertilizer: '🌱 Delay Urea application to avoid nutrient washing into field drains.',
-        spraying: '🐛 Postpone pesticide spraying until rain clears.',
-        harvest: '🌾 Cover harvested cotton bales with tarpaulin sheets.'
-      };
-    }
-
-    const fallbackPayload = {
-      success: true,
-      location: {
-        city: location || 'Ongole',
-        location: location || 'Ongole',
-        district: district || 'Prakasam',
-        state: 'Andhra Pradesh',
-        country: 'India'
-      },
-      today: { current_temp: cityData.current_temp, condition: cityData.condition, icon: cityData.icon, max_temp: cityData.max_temp, min_temp: cityData.min_temp, humidity: cityData.humidity, rain_probability: cityData.rain_probability, rainfall_mm: cityData.rainfall_mm, wind_speed: cityData.wind_speed, uv_index: cityData.uv_index, sunrise: cityData.sunrise, sunset: cityData.sunset },
-      forecast: [
-        { date: new Date().toISOString().split('T')[0], day: 'Today', max_temp: cityData.max_temp, min_temp: cityData.min_temp, condition: cityData.condition, icon: cityData.icon, humidity: cityData.humidity, rain_probability: cityData.rain_probability, rainfall_mm: cityData.rainfall_mm, wind_speed: cityData.wind_speed, uv_index: cityData.uv_index },
-        { date: new Date(Date.now() + 86400000).toISOString().split('T')[0], day: 'Mon', max_temp: cityData.max_temp + 1, min_temp: cityData.min_temp, condition: 'Sunny', icon: 'bi-sun-fill text-warning', humidity: cityData.humidity - 5, rain_probability: 10, rainfall_mm: 0.0, wind_speed: cityData.wind_speed - 2, uv_index: cityData.uv_index + 1 },
-        { date: new Date(Date.now() + 172800000).toISOString().split('T')[0], day: 'Tue', max_temp: cityData.max_temp - 3, min_temp: cityData.min_temp - 1, condition: 'Moderate Rain', icon: 'bi-cloud-rain-fill text-primary', humidity: Math.min(95, cityData.humidity + 15), rain_probability: 75, rainfall_mm: 14.5, wind_speed: cityData.wind_speed + 4, uv_index: 4 },
-        { date: new Date(Date.now() + 259200000).toISOString().split('T')[0], day: 'Wed', max_temp: cityData.max_temp - 2, min_temp: cityData.min_temp, condition: 'Drizzle', icon: 'bi-cloud-drizzle-fill text-primary', humidity: Math.min(90, cityData.humidity + 10), rain_probability: 50, rainfall_mm: 4.0, wind_speed: cityData.wind_speed + 2, uv_index: 5 },
-        { date: new Date(Date.now() + 345600000).toISOString().split('T')[0], day: 'Thu', max_temp: cityData.max_temp - 1, min_temp: cityData.min_temp, condition: 'Partly Cloudy', icon: 'bi-cloud-sun-fill text-info', humidity: cityData.humidity, rain_probability: 20, rainfall_mm: 0.0, wind_speed: cityData.wind_speed, uv_index: cityData.uv_index },
-        { date: new Date(Date.now() + 432000000).toISOString().split('T')[0], day: 'Fri', max_temp: cityData.max_temp, min_temp: cityData.min_temp + 1, condition: 'Clear Sky', icon: 'bi-sun-fill text-warning', humidity: cityData.humidity - 8, rain_probability: 5, rainfall_mm: 0.0, wind_speed: cityData.wind_speed - 3, uv_index: cityData.uv_index + 1 },
-        { date: new Date(Date.now() + 518400000).toISOString().split('T')[0], day: 'Sat', max_temp: cityData.max_temp + 1, min_temp: cityData.min_temp + 1, condition: 'Sunny', icon: 'bi-sun-fill text-warning', humidity: cityData.humidity - 10, rain_probability: 5, rainfall_mm: 0.0, wind_speed: cityData.wind_speed - 2, uv_index: cityData.uv_index + 2 }
-      ],
-      aiAnalysis: {
-        weeklySummary: cityData.summary,
-        irrigationAdvice: cityData.irrigation,
-        fertilizerAdvice: cityData.fertilizer,
-        sprayingAdvice: cityData.spraying,
-        harvestAdvice: cityData.harvest,
-        alerts: cityData.rain_probability >= 40 ? [{ type: 'Rain Warning', severity: 'warning', title: `🌧️ Rain Risk Alert for ${location || 'Region'}`, day: 'Tue', message: `High probability of rainfall on Tuesday. Check drainage channels.` }] : [],
-        farmingWindows: { irrigationWindow: 'Post-rainfall after Tuesday', fertilizerWindow: 'Today', sprayingWindow: 'Thursday Morning (06:30 - 08:30 AM)', harvestingWindow: 'Fri, Sat' }
-      }
-    };
-
-    const res = await fetchWithFallback(`/weather/forecast${queryParams}`, { method: 'GET', timeout: 8000 }, fallbackPayload);
-    const parsed = res?.data || res;
-    // Handle nested payload if fetchWithFallback wrapped it
-    return (parsed && parsed.today) ? parsed : (parsed?.data || fallbackPayload);
-  },
-
-  async updateWeatherLocation(data) {
-    const res = await fetchWithFallback('/weather/location', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }, { success: true, message: 'Location updated successfully' });
-    return res;
-  }
 };
 
 export default api;

@@ -39,7 +39,7 @@ router.get('/dashboard', authenticateToken, authorizeRoles('admin'), async (req,
 // GET /api/admin/users
 router.get('/users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   try {
-    const users = await query(`SELECT id, COALESCE(NULLIF(name, ''), full_name) AS full_name, email, role, phone, status, created_at FROM users ORDER BY created_at DESC`);
+    const users = await query(`SELECT id, COALESCE(NULLIF(full_name, ''), email) AS full_name, email, role, phone, status, created_at FROM users ORDER BY created_at DESC`);
     return res.json({ success: true, data: users });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -62,9 +62,9 @@ router.put('/users/:id/status', authenticateToken, authorizeRoles('admin'), asyn
 router.get('/lands', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   try {
     const lands = await query(
-      `SELECT l.*, l.land_type AS land_name, l.area_acres AS acres, l.price_per_year AS lease_price, COALESCE(NULLIF(u.name, ''), u.full_name) AS owner_name
+      `SELECT l.*, l.land_name, l.acres, l.lease_price, COALESCE(NULLIF(u.full_name, ''), u.email) AS owner_name
        FROM lands l
-       JOIN users u ON l.landowner_id = u.id
+       JOIN users u ON l.owner_id = u.id
        ORDER BY l.created_at DESC`
     );
     return res.json({ success: true, data: lands });
@@ -89,7 +89,7 @@ router.put('/lands/:id/status', authenticateToken, authorizeRoles('admin'), asyn
 router.get('/transactions', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   try {
     const txs = await query(
-      `SELECT t.*, COALESCE(NULLIF(u.name, ''), u.full_name) AS full_name, u.role
+      `SELECT t.*, COALESCE(NULLIF(u.full_name, ''), u.email) AS full_name, u.role
        FROM transactions t
        JOIN users u ON t.user_id = u.id
        ORDER BY t.created_at DESC`

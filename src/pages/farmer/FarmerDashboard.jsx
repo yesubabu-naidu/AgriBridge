@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import StatCard from '../../components/StatCard';
 import LandCard from '../../components/LandCard';
 import StatusBadge from '../../components/StatusBadge';
-import AgriAIChatbot from '../../components/AgriAIChatbot';
 import { api } from '../../services/api';
 
 export default function FarmerDashboard() {
   const [stats, setStats] = useState(null);
   const [recommendedLands, setRecommendedLands] = useState([]);
   const [loading, setLoading] = useState(true);
+  const loadedRef = useRef(false);
 
   useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
     loadDashboard();
   }, []);
 
@@ -95,47 +97,6 @@ export default function FarmerDashboard() {
             icon="bi-currency-rupee"
             color="primary"
           />
-        </div>
-      </div>
-
-      {/* 7-Day AI Weather Forecast Quick Banner */}
-      <div
-        className="card border-0 shadow-sm mb-4 overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, #0b4128 0%, #157347 100%)',
-          color: 'white',
-          borderRadius: '16px'
-        }}
-      >
-        <div className="card-body p-3 p-sm-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-          <div className="w-100">
-            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-              <span className="badge bg-warning text-dark fw-bold text-uppercase">
-                🌤️ AGRI-AI METEOROLOGY
-              </span>
-
-              <span className="extra-small text-white-50">
-                Live 7-Day Satellite Microclimate Forecast
-              </span>
-            </div>
-
-            <h4 className="fw-black mb-1 text-white fs-4 fs-sm-3">
-              7-Day AI Agricultural Weather Forecast
-            </h4>
-
-            <p className="text-white-50 small mb-0">
-              Get real-time precipitation, temperature, humidity, and AI advisories
-              for irrigation, spraying, and harvesting.
-            </p>
-          </div>
-
-          <Link
-            to="/farmer/weather"
-            className="btn btn-warning text-dark fw-bold px-4 py-2 w-100 w-md-auto text-center"
-          >
-            <i className="bi bi-cloud-sun me-1"></i>
-            View Forecast
-          </Link>
         </div>
       </div>
 
@@ -254,9 +215,6 @@ export default function FarmerDashboard() {
           </table>
         </div>
       </div>
-
-      {/* Floating AI Agriculture Chatbot Assistant */}
-      <AgriAIChatbot />
     </div>
   );
 }

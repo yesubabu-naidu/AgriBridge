@@ -6,16 +6,24 @@ import { deleteObject, makePublicId, uploadBuffer, validateUpload } from '../ser
 
 const router = express.Router();
 
+let userColumnsCache = null;
+
+async function getUserColumns() {
+  if (userColumnsCache) return userColumnsCache;
+  try {
+    const rows = await query("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'");
+    userColumnsCache = new Set(rows.map((r) => String(r.column_name || r.COLUMN_NAME || '').toLowerCase()));
+    return userColumnsCache;
+  } catch {
+    return new Set(['id', 'full_name', 'email', 'role', 'phone', 'avatar', 'status']);
+  }
+}
+
 async function getAvatarColumn() {
-  const columns = await query(`
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'users'
-  `);
-  const names = new Set(columns.map((column) => column.column_name));
-  if (names.has('avatar_url')) return 'avatar_url';
-  if (names.has('avatar')) return 'avatar';
-  throw new Error('The users table must contain avatar or avatar_url.');
+  const cols = await getUserColumns();
+  if (cols.has('avatar')) return 'avatar';
+  if (cols.has('avatar_url')) return 'avatar_url';
+  return 'avatar';
 }
 
 router.put("/", authenticateToken, async (req, res) => {
@@ -27,12 +35,26 @@ router.put("/", authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "Name and a valid email address are required." });
     }
 
-    const users = await query("SELECT id, role, name AS full_name, email, phone, avatar_url AS avatar FROM users WHERE id = ?", [req.user.id]);
+    const users = await query("SELECT * FROM users WHERE id = ?", [req.user.id]);
     if (!users.length) return res.status(404).json({ success: false, message: "User not found." });
     const duplicate = await query("SELECT id FROM users WHERE email = ? AND id <> ?", [cleanEmail, req.user.id]);
     if (duplicate.length) return res.status(409).json({ success: false, message: "That email address is already in use." });
 
-    await query("UPDATE users SET name = ?, full_name = ?, email = ?, phone = ?, location = ? WHERE id = ?", [cleanName, cleanName, cleanEmail, String(phone || "").trim(), location || null, req.user.id]);
+    const cols = await getUserColumns();
+    const setClauses = [];
+    const setParams = [];
+
+    if (cols.has('full_name')) { setClauses.push('full_name = ?'); setParams.push(cleanName); }
+    if (cols.has('name')) { setClauses.push('name = ?'); setParams.push(cleanName); }
+    if (cols.has('email')) { setClauses.push('email = ?'); setParams.push(cleanEmail); }
+    if (cols.has('phone')) { setClauses.push('phone = ?'); setParams.push(String(phone || "").trim()); }
+    if (cols.has('location')) { setClauses.push('location = ?'); setParams.push(location || null); }
+
+    if (setClauses.length) {
+      setParams.push(req.user.id);
+      await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, setParams);
+    }
+
     const role = users[0].role;
     if (role === "farmer") {
       const acres = Number.parseFloat(String(farm_size || "").replace(/[^0-9.]/g, "")) || 0;
@@ -45,10 +67,33 @@ router.put("/", authenticateToken, async (req, res) => {
       else await query("INSERT INTO buyer_profiles (user_id, company_name, shipping_address) VALUES (?, ?, ?)", [req.user.id, company_name || "", shipping_address || ""]);
     } else if (role === "landowner") {
       const acres = Number.parseFloat(String(farm_size || "").replace(/[^0-9.]/g, "")) || 0;
-      await query("UPDATE landowner_profiles SET total_land_acres = ? WHERE user_id = ?", [acres, req.user.id]);
+      const profiles = await query("SELECT id FROM landowner_profiles WHERE user_id = ?", [req.user.id]);
+      if (profiles.length) await query("UPDATE landowner_profiles SET total_land_acres = ? WHERE user_id = ?", [acres, req.user.id]);
+      else await query("INSERT INTO landowner_profiles (user_id, total_land_acres) VALUES (?, ?)", [req.user.id, acres]);
     }
 
-    return res.json({ success: true, message: "Profile updated successfully.", data: { user: { ...users[0], full_name: cleanName, email: cleanEmail, phone: String(phone || "").trim(), location, farm_size, primary_crops, company_name, shipping_address } } });
+    const updatedUsers = await query("SELECT * FROM users WHERE id = ?", [req.user.id]);
+    const updatedUser = updatedUsers[0] || users[0];
+
+    return res.json({
+      success: true,
+      message: "Profile updated successfully.",
+      data: {
+        user: {
+          id: updatedUser.id,
+          full_name: cleanName,
+          email: cleanEmail,
+          phone: String(phone || "").trim(),
+          role: updatedUser.role,
+          avatar: updatedUser.avatar || updatedUser.avatar_url || null,
+          location,
+          farm_size,
+          primary_crops,
+          company_name,
+          shipping_address
+        }
+      }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

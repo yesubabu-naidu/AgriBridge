@@ -24,29 +24,29 @@ export default function LandownerDashboard() {
 
   return (
     <div className="landowner-dashboard">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
         <div>
           <span className="eyebrow">LANDOWNER WORKSPACE</span>
-          <h2 className="fw-black mb-1">Welcome, Landowner! 🌾</h2>
-          <p className="text-muted small">Manage agricultural land listings and review lease applications.</p>
+          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Welcome, Landowner! 🌾</h2>
+          <p className="text-muted small mb-0">Manage agricultural land listings and review lease applications.</p>
         </div>
-        <Link to="/landowner/add-land" className="btn btn-success">
+        <Link to="/landowner/add-land" className="btn btn-success w-100 w-sm-auto text-center">
           <i className="bi bi-plus-lg me-1"></i> Add New Land
         </Link>
       </div>
 
       {/* Stats */}
-      <div className="row g-3 mb-4">
-        <div className="col-lg-3 col-md-6">
+      <div className="row g-2 g-sm-3 mb-4">
+        <div className="col-6 col-lg-3">
           <StatCard title="Total Lands" value={stats.total_lands} icon="bi-map" color="primary" />
         </div>
-        <div className="col-lg-3 col-md-6">
+        <div className="col-6 col-lg-3">
           <StatCard title="Total Earnings" value={`₹${Number(stats.total_earnings).toLocaleString()}`} icon="bi-wallet2" color="success" />
         </div>
-        <div className="col-lg-3 col-md-6">
-          <StatCard title="Pending Applications" value={stats.pending_applications} icon="bi-hourglass-split" color="warning" />
+        <div className="col-6 col-lg-3">
+          <StatCard title="Pending Apps" value={stats.pending_applications} icon="bi-hourglass-split" color="warning" />
         </div>
-        <div className="col-lg-3 col-md-6">
+        <div className="col-6 col-lg-3">
           <StatCard title="Active Leases" value={stats.active_leases} icon="bi-check-circle" color="info" />
         </div>
       </div>

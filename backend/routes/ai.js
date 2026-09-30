@@ -3,7 +3,6 @@ import { query } from '../config/db.js';
 import { generateLLMResponse } from '../services/llmService.js';
 import { getRelevantKnowledge } from '../services/ragService.js';
 import { classifyQuery } from '../services/queryRouter.js';
-import { getFarmerWeather } from '../services/weatherService.js';
 import { getMarketPrice } from '../services/marketService.js';
 import { aiSecurityMiddleware } from '../middleware/aiSecurity.js';
 
@@ -47,17 +46,9 @@ router.post('/chat', async (req, res) => {
     // 2. Classify Query Intent
     const classification = classifyQuery(cleanMessage);
 
-    // 3. Gather Context from RAG, Weather, and Market APIs
+    // 3. Gather Context from RAG and Market APIs
     let ragResult = { context: '', sources: [] };
-    let weatherData = null;
     let marketData = null;
-
-    if (classification.needsWeather) {
-      weatherData = await getFarmerWeather({
-        location: farmerContext.location,
-        district: farmerContext.district
-      });
-    }
 
     if (classification.needsMarket) {
       marketData = await getMarketPrice({
@@ -90,7 +81,6 @@ Farmer Profile Context:
       systemPrompt,
       language,
       ragContext: ragResult.context,
-      weatherData,
       marketData
     });
 
@@ -126,7 +116,6 @@ Farmer Profile Context:
       language,
       category: classification.primaryCategory,
       sources: ragResult.sources,
-      usedWeatherData: !!weatherData,
       usedMarketData: !!marketData,
       created_at: new Date().toISOString()
     });
@@ -198,7 +187,6 @@ router.get('/suggested-questions', (req, res) => {
         '💧 నేను ఈ రోజు వరి చేనుకి నీరు పారించవచ్చా?',
         '🌱 టమోటా పంటలో ఎరువుల మోతాదు ఎంత?',
         '🐛 నా మిరప ఆకులు ముడుచుకుపోతున్నాయి, ఏ మందు చల్లాలి?',
-        '🌧️ రాబోయే 3 రోజుల వాతావరణ సమాచారం తెలుపండి',
         '💰 ఈ రోజు టమోటా మరియు మిరప మార్కెట్ ధర ఎంత?',
         '🌾 పంట దిగుబడిని ఎలా పెంచుకోవాలి?',
         '📜 ప్రభుత్వ రైతు భరోసా పథకం వివరాలు ఇవ్వండి'
@@ -213,7 +201,6 @@ router.get('/suggested-questions', (req, res) => {
       '💧 Should I irrigate my paddy field today?',
       '🌱 What fertilizer schedule is best for Tomato?',
       '🐛 My chilli leaves are curling upward. What pest spray to use?',
-      '🌧️ What is the weather forecast for my district?',
       '💰 What is today\'s market price for Tomato & Chilli?',
       '🌾 How can I double my crop yield organically?',
       '📜 Tell me about PM-KISAN & PMFBY insurance benefits'

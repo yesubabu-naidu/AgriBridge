@@ -9,7 +9,7 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
  * Configurable LLM Provider Service
  * Supports Google Gemini, OpenAI-compatible APIs, or Ollama, with graceful fallback.
  */
-export async function generateLLMResponse({ prompt, systemPrompt, language = 'en', ragContext = '', weatherData = null, marketData = null }) {
+export async function generateLLMResponse({ prompt, systemPrompt, language = 'en', ragContext = '', marketData = null }) {
   const apiKey = process.env.LLM_API_KEY || process.env.GEMINI_API_KEY;
   const model = process.env.LLM_MODEL || 'gemini-1.5-flash';
   const baseUrl = process.env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
@@ -17,13 +17,12 @@ export async function generateLLMResponse({ prompt, systemPrompt, language = 'en
   const fullSystemPrompt = `${systemPrompt || 'You are AgriAI, a helpful, practical agricultural assistant for farmers.'}
 Language requested: ${language === 'te' ? 'Telugu (తెలుగు)' : 'English'}.
 ${ragContext ? `\n[VERIFIED AGRONOMIC KNOWLEDGE BASE]\n${ragContext}` : ''}
-${weatherData ? `\n[LIVE WEATHER DATA]\n${JSON.stringify(weatherData)}` : ''}
 ${marketData ? `\n[LIVE MARKET MANDI PRICES]\n${JSON.stringify(marketData)}` : ''}
 
 CRITICAL RULES:
 1. Speak in simple, respectful, and easy-to-understand language for farmers.
 2. Structure recommendations clearly using bullet points and emojis.
-3. NEVER invent market prices or weather forecasts if not present in verified data.
+3. NEVER invent market prices or factual agricultural data that is not present in verified sources.
 4. For crop diseases/pests, advise appropriate safety equipment when spraying chemicals and mention organic alternatives (e.g. Neem oil, Jeevamrutham).
 5. If language is Telugu, answer naturally in clear Telugu (తెలుగు) without translating technical chemical terms incorrectly.`;
 
@@ -61,10 +60,10 @@ CRITICAL RULES:
   }
 
   // Smart Agronomic Reasoning Fallback Engine (when API key is unconfigured or offline)
-  return fallbackAgronomicReasoning({ prompt, language, ragContext, weatherData, marketData });
+  return fallbackAgronomicReasoning({ prompt, language, ragContext, marketData });
 }
 
-function fallbackAgronomicReasoning({ prompt, language, ragContext, weatherData, marketData }) {
+function fallbackAgronomicReasoning({ prompt, language, ragContext, marketData }) {
   const isTelugu = language === 'te' || /[\u0C00-\u0C7F]/.test(prompt);
 
   if (ragContext) {
@@ -86,11 +85,6 @@ function fallbackAgronomicReasoning({ prompt, language, ragContext, weatherData,
     }
   }
 
-  if (weatherData) {
-    return isTelugu
-      ? `🌧️ **వాతావరణ వివరాలు (${weatherData.location || 'మీ ప్రాంతం'})**:\n- ఉష్ణోగ్రత: ${weatherData.temperature}°C\n- ఆర్ద్రత (Humidity): ${weatherData.humidity}%\n- వర్షపాత సంభావ్యత: ${weatherData.rain_probability}%\n\n💡 ${weatherData.rain_probability > 50 ? 'వర్షం పడే అవకాశం ఉన్నందున ఎరువులు లేదా మందులు చల్లడం వాయిదా వేయండి.' : 'వాతావరణం అనుకూలంగా ఉంది.'}`
-      : `🌧️ **Weather Advisory (${weatherData.location || 'Your Region'})**:\n- Temperature: ${weatherData.temperature}°C\n- Humidity: ${weatherData.humidity}%\n- Rain Probability: ${weatherData.rain_probability}%\n\n💡 ${weatherData.rain_probability > 50 ? 'High likelihood of rain. Postpone pesticide/fertilizer spraying to avoid washout.' : 'Weather conditions are suitable for field activities.'}`;
-  }
 
   if (isTelugu) {
     return `🌾 **రైతు భరోసా సలహా (AgriAI Assistant)**:\n\nమీ ప్రశ్న స్వీకరించబడింది. పంటల సాగు, నేల యాజమాన్యం, ఎరువుల మోతాదు మరియు పిచికారీ విధానాలపై మీకు సమగ్ర సమాచారం అందించడానికి సిద్ధంగా ఉన్నాను.\n\n- **వరి / టమోటా / మిరప**: సరైన సమయంలో ఎరువులు (NPK) చల్లడం ద్వారా దిగుబడి పెరుగుతుంది.\n- **సందేహాలు**: తెగులు మచ్చల లక్షణాలను లేదా పంట పేరును పేర్కొనండి.`;

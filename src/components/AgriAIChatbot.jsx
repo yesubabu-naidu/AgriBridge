@@ -47,8 +47,8 @@ export default function AgriAIChatbot({ user }) {
           id: 'welcome_1',
           role: 'assistant',
           content: language === 'te'
-            ? '🤖 **నమస్కారం! నేను మీ AgriAI అసిస్టెంట్‌ని.**\n\nపంటల సాగు, ఎరువుల మోతాదు, నేల రకాలు, తెగుళ్ళ నివారణ, వాతావరణం మరియు మార్కెట్ ధరలపై మీ ప్రశ్నలకు సహాయపడటానికి నేను సిద్ధంగా ఉన్నాను. క్రింది సూచించిన ప్రశ్నలలో ఒకదాన్ని ఎంచుకోండి లేదా మీ ప్రశ్నను టైప్ చేయండి.'
-            : '🤖 **Hello! I am your AgriAI Assistant.**\n\nI can help you with crop selection, fertilizer schedules, soil health, pest/disease identification, weather decisions, and live market prices.\n\nChoose a suggested question below or type your query!',
+            ? '🤖 **నమస్కారం! నేను మీ AgriAI అసిస్టెంట్‌ని.**\n\nపంటల సాగు, ఎరువుల మోతాదు, నేల రకాలు, తెగుళ్ళ నివారణ మరియు మార్కెట్ ధరలపై మీ ప్రశ్నలకు సహాయపడటానికి నేను సిద్ధంగా ఉన్నాను. క్రింది సూచించిన ప్రశ్నలలో ఒకదాన్ని ఎంచుకోండి లేదా మీ ప్రశ్నను టైప్ చేయండి.'
+            : '🤖 **Hello! I am your AgriAI Assistant.**\n\nI can help you with crop selection, fertilizer schedules, soil health, pest/disease identification, and live market prices.\n\nChoose a suggested question below or type your query!',
           sources: [],
           created_at: new Date().toISOString()
         }
@@ -92,7 +92,6 @@ export default function AgriAIChatbot({ user }) {
           role: 'assistant',
           content: res.answer,
           sources: res.sources || [],
-          usedWeatherData: res.usedWeatherData,
           usedMarketData: res.usedMarketData,
           created_at: new Date().toISOString()
         };
@@ -186,11 +185,10 @@ export default function AgriAIChatbot({ user }) {
   return (
     <>
       {/* Floating Action Button (FAB) */}
-      <div className="position-fixed bottom-0 end-0 p-3 p-md-4" style={{ zIndex: 1050 }}>
+      <div className="agri-fab-container">
         {!isOpen && (
           <button
-            className="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0 position-relative animate__animated animate__bounceIn"
-            style={{ width: '64px', height: '64px', border: '3px solid white' }}
+            className="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0 position-relative animate__animated animate__bounceIn agri-fab-btn"
             onClick={() => setIsOpen(true)}
             title="Open AgriAI Assistant"
           >
@@ -205,15 +203,7 @@ export default function AgriAIChatbot({ user }) {
       {/* Floating Chat Drawer Container */}
       {isOpen && (
         <div 
-          className="position-fixed bottom-0 end-0 m-0 m-sm-3 card shadow-lg border-0 overflow-hidden" 
-          style={{ 
-            zIndex: 1060, 
-            width: '100%', 
-            maxWidth: '460px', 
-            height: '92vh', 
-            maxHeight: '680px',
-            borderRadius: '16px' 
-          }}
+          className="agri-chatbot-drawer card shadow-lg border-0 overflow-hidden"
         >
           {/* Header */}
           <div className="card-header bg-success text-white py-3 px-3 d-flex align-items-center justify-content-between">
@@ -348,7 +338,7 @@ export default function AgriAIChatbot({ user }) {
                 <div className="bg-white p-3 rounded-3 border border-light shadow-xs d-flex align-items-center gap-2">
                   <div className="spinner-border spinner-border-sm text-success" role="status"></div>
                   <span className="extra-small text-muted fw-bold">
-                    🤖 {language === 'te' ? 'ఆగ్రి-ఏఐ సెర్చ్ చేసి సమాధానం సిద్ధం చేస్తోంది...' : 'AgriAI is analyzing RAG database & weather APIs...'}
+                    🤖 {language === 'te' ? 'ఆగ్రి-ఏఐ సెర్చ్ చేసి సమాధానం సిద్ధం చేస్తోంది...' : 'AgriAI is analyzing verified agricultural knowledge and market data...'}
                   </span>
                 </div>
               </div>
@@ -410,7 +400,7 @@ export default function AgriAIChatbot({ user }) {
                 placeholder={
                   isListening
                     ? (language === 'te' ? 'మాట్లాడండి... ఆలకిస్తోంది' : 'Listening... Speak now')
-                    : (language === 'te' ? 'మీ వ్యవసాయ సందేహాన్ని టైప్ చేయండి...' : 'Ask AgriAI about crops, soil, pests, weather...')
+                    : (language === 'te' ? 'మీ వ్యవసాయ సందేహాన్ని టైప్ చేయండి...' : 'Ask AgriAI about crops, soil, pests, and markets...')
                 }
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}

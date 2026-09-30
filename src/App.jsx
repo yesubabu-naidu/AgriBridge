@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 
 // Layout & Core Components
@@ -63,6 +63,28 @@ export default function App() {
   });
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Any route change closes the mobile drawer so it can never sit above a new page.
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) {
+      document.body.classList.remove('mobile-sidebar-open');
+      return undefined;
+    }
+
+    document.body.classList.add('mobile-sidebar-open');
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setMobileSidebarOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.body.classList.remove('mobile-sidebar-open');
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [mobileSidebarOpen]);
 
   const handleLogin = (userData) => {
     setUser(userData);

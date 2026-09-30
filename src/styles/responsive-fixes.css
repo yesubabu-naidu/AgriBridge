@@ -1,0 +1,407 @@
+/*
+ * AgriBridge Responsive / Mobile Reliability Layer
+ * Loaded after the main stylesheet so these rules are the final layout contract.
+ */
+
+:root {
+  --mobile-nav-height: 68px;
+  --mobile-sidebar-width: min(292px, 86vw);
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.mobile-sidebar-open {
+  overflow: hidden !important;
+  touch-action: none;
+}
+
+.dashboard-container,
+.dash-main,
+.dash-content,
+.dash-content > *,
+.row,
+[class*="col-"] {
+  min-width: 0;
+}
+
+/* ---------- Desktop sidebar ---------- */
+.sidebar {
+  width: 250px;
+  min-width: 250px;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  flex: 0 0 auto;
+}
+
+.sidebar-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sidebar-footer {
+  flex: 0 0 auto;
+  background: var(--surface, #fff);
+  position: relative;
+  z-index: 2;
+}
+
+.sidebar-footer .sidebar-item {
+  margin: 0;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(15, 23, 18, 0.48);
+  backdrop-filter: blur(2px);
+  z-index: 1050;
+  cursor: pointer;
+}
+
+/* ---------- Dashboard ---------- */
+.dash-main {
+  width: calc(100% - 250px);
+  max-width: calc(100% - 250px);
+}
+
+.dash-content {
+  width: 100%;
+  max-width: 1440px;
+  box-sizing: border-box;
+}
+
+.dash-header {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Avoid Bootstrap row negative margins becoming viewport overflow. */
+.dash-content .row {
+  max-width: 100%;
+}
+
+.card,
+.stat-pill,
+.stat-card,
+.product-card,
+.land-card,
+.table-responsive,
+.form-control,
+.form-select,
+.btn {
+  max-width: 100%;
+}
+
+/* Long values must never force a card wider than its parent. */
+.stat-pill,
+.stat-pill > *,
+.stat-card,
+.stat-card > *,
+.card-body,
+.card-header,
+.card-footer {
+  min-width: 0;
+}
+
+.stat-pill h3,
+.stat-pill small,
+.stat-card h3,
+.stat-card small,
+.card h1,
+.card h2,
+.card h3,
+.card h4,
+.card h5,
+.card h6,
+.card p,
+.card span,
+.sidebar-item span {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* ---------- Mobile bottom navigation ---------- */
+.mobile-bottom-nav {
+  height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  padding: 6px 8px env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  display: none;
+  align-items: center;
+  justify-content: space-around;
+  gap: 4px;
+}
+
+.mobile-bottom-nav a {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 5px 4px;
+  text-decoration: none;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.05;
+}
+
+.mobile-bottom-nav a span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- AI assistant ---------- */
+.agri-fab-container {
+  right: 24px;
+  bottom: 24px;
+  max-width: calc(100vw - 32px);
+}
+
+.agri-fab-btn {
+  flex: 0 0 auto;
+}
+
+.agri-chatbot-drawer {
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+@media (max-width: 991.98px) {
+  .dashboard-container {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sidebar {
+    width: var(--mobile-sidebar-width);
+    min-width: 0;
+    max-width: 86vw;
+    height: 100dvh;
+    top: 0;
+    bottom: auto;
+    transform: translateX(-105%);
+    transition: transform 220ms ease;
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.16);
+    z-index: 1060;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-header {
+    padding: 18px 16px;
+    min-height: 64px;
+  }
+
+  .sidebar-menu {
+    padding: 12px 10px;
+  }
+
+  .sidebar-item {
+    min-height: 46px;
+    padding: 10px 12px;
+  }
+
+  .sidebar-footer {
+    padding: 10px !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .dash-main {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0 !important;
+    padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+  }
+
+  .dash-header {
+    min-height: 64px;
+    height: auto;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .dash-header > * {
+    min-width: 0;
+  }
+
+  .dash-content {
+    width: 100%;
+    max-width: 100%;
+    padding: 14px !important;
+    overflow: visible;
+  }
+
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+
+  .agri-fab-container {
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(var(--mobile-nav-height) + 12px + env(safe-area-inset-bottom, 0px));
+    z-index: 1045;
+  }
+
+  .agri-fab-btn {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  .agri-chatbot-drawer {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: calc(var(--mobile-nav-height) + 8px + env(safe-area-inset-bottom, 0px)) !important;
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    height: min(78dvh, 680px) !important;
+    max-height: calc(100dvh - var(--mobile-nav-height) - 24px) !important;
+  }
+
+  .payment-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-responsive {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 575.98px) {
+  :root {
+    --mobile-nav-height: 66px;
+  }
+
+  .dash-header {
+    padding: 9px 10px;
+  }
+
+  .dash-content {
+    padding: 10px !important;
+  }
+
+  .dash-content .row {
+    --bs-gutter-x: 0.6rem;
+    --bs-gutter-y: 0.6rem;
+  }
+
+  .farmer-dashboard,
+  .landowner-dashboard,
+  .buyer-dashboard,
+  .admin-dashboard {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .farmer-dashboard .btn,
+  .landowner-dashboard .btn,
+  .buyer-dashboard .btn,
+  .admin-dashboard .btn {
+    max-width: 100%;
+  }
+
+  .stat-pill {
+    padding: 10px !important;
+    gap: 8px !important;
+  }
+
+  .stat-icon-wrap {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .stat-pill h3,
+  .stat-card h3 {
+    font-size: clamp(15px, 4.8vw, 20px) !important;
+    line-height: 1.1;
+  }
+
+  .stat-pill small,
+  .stat-card small {
+    font-size: 10px !important;
+    line-height: 1.2;
+  }
+
+  .product-card .btn,
+  .land-card .btn {
+    width: 100%;
+  }
+
+  .modal-dialog {
+    margin: 0.5rem !important;
+    max-width: calc(100% - 1rem) !important;
+  }
+
+  .form-control,
+  .form-select,
+  textarea {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .sidebar {
+    width: 84vw;
+  }
+
+  .sidebar-item {
+    padding-left: 10px;
+    padding-right: 10px;
+    gap: 9px;
+    font-size: 13px;
+  }
+
+  .dash-content {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .mobile-bottom-nav a {
+    padding-left: 2px;
+    padding-right: 2px;
+    font-size: 10px;
+  }
+
+  .mobile-bottom-nav i {
+    font-size: 18px !important;
+  }
+}
+
+@media (min-width: 992px) {
+  .sidebar-overlay {
+    display: none !important;
+  }
+
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
+
+/* Landscape phones: keep the drawer usable without hiding its footer. */
+@media (max-width: 991.98px) and (orientation: landscape) {
+  .sidebar {
+    width: min(320px, 72vw);
+  }
+
+  .sidebar-menu {
+    overflow-y: auto;
+  }
+}
