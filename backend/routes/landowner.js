@@ -1,6 +1,7 @@
 import express from 'express';
 import { query, withTransaction } from '../config/db.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
+import { calculateTotalLeaseAmount, getLeaseDurationMonths } from '../services/leaseService.js';
 
 const router = express.Router();
 const farmerName = "COALESCE(NULLIF(u.full_name, ''), u.email)";
@@ -17,7 +18,30 @@ router.get('/dashboard', authenticateToken, authorizeRoles('landowner'), async (
     total_lands: () => query('SELECT COUNT(*) AS value FROM lands WHERE owner_id = ?', [ownerId]),
     active_leases: () => query("SELECT COUNT(*) AS value FROM leases WHERE owner_id = ? AND status = 'active'", [ownerId]),
     pending_applications: () => query("SELECT COUNT(app.id) AS value FROM lease_applications app JOIN lands l ON app.land_id = l.id WHERE l.owner_id = ? AND app.status = 'pending'", [ownerId]),
-    total_earnings: () => query("SELECT COALESCE(SUM(annual_price), 0) AS value FROM leases WHERE owner_id = ? AND payment_status = 'paid'", [ownerId]),
+    total_earnings: async () => {
+      const txRows = await query(
+        "SELECT COALESCE(SUM(amount), 0) AS value FROM transactions WHERE user_id = ? AND type IN ('lease_payment', 'payout') AND status = 'successful'",
+        [ownerId]
+      );
+      const txTotal = Number(txRows[0]?.value || 0);
+      if (txTotal > 0) return [{ value: txTotal }];
+
+      const leaseRows = await query(
+        `SELECT les.annual_price, les.start_date, les.end_date,
+                COALESCE(app.proposed_duration_months, l.lease_duration_months, 12) AS duration_months
+         FROM leases les
+         JOIN lands l ON les.land_id = l.id
+         LEFT JOIN lease_applications app ON les.application_id = app.id
+         WHERE les.owner_id = ? AND les.payment_status = 'paid'`,
+        [ownerId]
+      );
+      const leaseTotal = leaseRows.reduce((sum, row) => {
+        const annual = Number(row.annual_price || 0);
+        const duration = getLeaseDurationMonths(row);
+        return sum + calculateTotalLeaseAmount(annual, duration);
+      }, 0);
+      return [{ value: leaseTotal }];
+    },
     recent_applications: () => query(`SELECT app.*, ${landLabel}, l.location, ${farmerName} AS farmer_name FROM lease_applications app JOIN lands l ON app.land_id = l.id JOIN users u ON app.farmer_id = u.id WHERE l.owner_id = ? ORDER BY app.created_at DESC LIMIT 5`, [ownerId])
   };
   try {
@@ -65,32 +89,47 @@ router.put('/applications/:id/status', authenticateToken, authorizeRoles('landow
 
 router.get('/earnings', authenticateToken, authorizeRoles('landowner'), async (req, res) => {
   try {
-    const [transactions, pending] = await Promise.all([
-      query(
-        `SELECT t.*, l.land_name, l.location, u.full_name AS farmer_name, u.email AS farmer_email
-         FROM transactions t
-         LEFT JOIN leases les ON t.reference_id = CONCAT('LEASE-', les.id)
-         LEFT JOIN lands l ON les.land_id = l.id
-         LEFT JOIN users u ON les.farmer_id = u.id
-         WHERE t.user_id = ? AND t.type = 'lease_payment' AND t.status = 'successful'
-         ORDER BY t.created_at DESC`,
-        [req.user.id]
-      ),
-      query(
-        `SELECT COALESCE(SUM(les.annual_price), 0) AS value
-         FROM leases les
-         WHERE les.owner_id = ? AND les.payment_status = 'pending' AND les.status = 'active'`,
-        [req.user.id]
-      )
-    ]);
+    const ownerId = req.user.id;
+    const transactions = await query(
+      `SELECT t.id, t.transaction_id, t.user_id, t.type, t.amount, t.payment_method, t.status, t.reference_id, t.description, t.created_at,
+              l.land_name, l.location,
+              COALESCE(NULLIF(u.full_name, ''), u.email, 'Tenant Farmer') AS farmer_name,
+              u.email AS farmer_email
+       FROM transactions t
+       LEFT JOIN leases les ON (t.reference_id = CONCAT('LEASE-', les.id) OR t.reference_id = CAST(les.id AS VARCHAR))
+       LEFT JOIN lands l ON les.land_id = l.id
+       LEFT JOIN users u ON les.farmer_id = u.id
+       WHERE t.user_id = ? AND t.type IN ('lease_payment', 'payout') AND t.status = 'successful'
+       ORDER BY t.created_at DESC`,
+      [ownerId]
+    );
+
+    const pendingRows = await query(
+      `SELECT les.annual_price, les.start_date, les.end_date,
+              COALESCE(app.proposed_duration_months, l.lease_duration_months, 12) AS duration_months
+       FROM leases les
+       JOIN lands l ON les.land_id = l.id
+       LEFT JOIN lease_applications app ON les.application_id = app.id
+       WHERE les.owner_id = ? AND les.payment_status = 'pending' AND les.status = 'active'`,
+      [ownerId]
+    );
+
+    const pendingTotal = pendingRows.reduce((sum, row) => {
+      const annual = Number(row.annual_price || 0);
+      const duration = getLeaseDurationMonths(row);
+      return sum + calculateTotalLeaseAmount(annual, duration);
+    }, 0);
+
+    const totalEarnings = transactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
 
     return res.json({
       success: true,
       data: {
-        transactions,
-        total_earnings: transactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0),
-        pending_earnings: Number(pending[0]?.value || 0),
-        completed_payouts: transactions.length
+        total_earnings: totalEarnings,
+        pending_payments: pendingTotal,
+        pending_earnings: pendingTotal,
+        completed_payouts: transactions.length,
+        transactions
       }
     });
   } catch (error) { return errorResponse(res, error); }

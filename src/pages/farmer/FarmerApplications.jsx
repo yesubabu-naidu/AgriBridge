@@ -51,7 +51,12 @@ export default function FarmerApplications() {
                     <td className="fw-bold">{app.land_name || 'Green Valley Farm'}</td>
                     <td>{app.location || 'Ongole'}</td>
                     <td>{app.owner_name || 'Venkatesh Rao'}</td>
-                    <td className="fw-bold text-success">₹{Number(app.proposed_price || 40000).toLocaleString()}/yr</td>
+                    <td>
+                      <div className="fw-bold text-success">₹{Number(app.proposed_price || 40000).toLocaleString()}/year</div>
+                      <small className="text-muted d-block">
+                        Total: ₹{(Math.round((Number(app.proposed_price || 40000) * ((Number(app.proposed_duration_months) || 12) / 12)) * 100) / 100).toLocaleString()}
+                      </small>
+                    </td>
                     <td>{app.proposed_duration_months || 12} Months</td>
                     <td><StatusBadge status={app.status} /></td>
                     <td className="small text-muted">{app.created_at || '2026-08-25'}</td>

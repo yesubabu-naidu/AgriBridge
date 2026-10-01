@@ -43,4 +43,10 @@ app.use('/api/ai', authenticateToken, authorizeRoles('farmer'), guardFarmerData,
 app.get('/api/health', (req, res) => res.json({ success: true, message: 'AgriBridge API is healthy.', timestamp: new Date().toISOString() }));
 app.use((req, res) => res.status(404).json({ success: false, message: 'API route not found.' }));
 app.use((error, req, res, next) => { console.error('Unhandled request error:', error.message); const fileError = error.code === 'LIMIT_FILE_SIZE' || error.code === 'INVALID_FILE_TYPE'; res.status(fileError ? 400 : 500).json({ success: false, message: error.code === 'LIMIT_FILE_SIZE' ? 'File is too large.' : error.code === 'INVALID_FILE_TYPE' ? error.message : 'Internal server error.' }); });
-app.listen(port, () => console.log(`AgriBridge API listening on port ${port}`));
+import { query } from './config/db.js';
+import { syncExistingLeaseAmounts } from './services/leaseService.js';
+
+app.listen(port, () => {
+  console.log(`AgriBridge API listening on port ${port}`);
+  syncExistingLeaseAmounts(query).catch(err => console.error('Initial lease sync check note:', err.message));
+});

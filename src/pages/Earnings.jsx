@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import StatCard from '../../components/StatCard';
-import StatusBadge from '../../components/StatusBadge';
-import EmptyState from '../../components/EmptyState';
-import { api } from '../../services/api';
+import StatCard from '../components/StatCard';
+import StatusBadge from '../components/StatusBadge';
+import EmptyState from '../components/EmptyState';
+import { api } from '../services/api';
 
 export default function Earnings() {
   const [payouts, setPayouts] = useState([]);
@@ -11,47 +11,27 @@ export default function Earnings() {
   const [completedCount, setCompletedCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const savedUser = localStorage.getItem('agribridge_user');
-  const user = savedUser ? JSON.parse(savedUser) : null;
-
   useEffect(() => {
     loadEarningsData();
   }, []);
 
   const loadEarningsData = async () => {
     setLoading(true);
-    const transactions = await api.getTransactions();
-    const leases = await api.getFarmerLeases();
-
-    // Filter transactions associated with this landowner's properties
-    const landTransactions = transactions.filter(t => t.type === 'lease_payment');
-
-    if (user) {
-      // Filter for this specific landowner
-      const myPayouts = landTransactions.filter(t => 
-        (t.owner_email && t.owner_email.toLowerCase() === user.email.toLowerCase()) ||
-        (t.owner_name && t.owner_name.toLowerCase() === user.full_name.toLowerCase()) ||
-        (t.user_id === user.id)
-      );
-
-      const total = myPayouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      const pendingLeases = leases.filter(l => 
-        (l.owner_name && l.owner_name.toLowerCase() === user.full_name.toLowerCase()) && 
-        l.payment_status === 'pending'
-      );
-      const pendingSum = pendingLeases.reduce((sum, l) => sum + Number(l.annual_price || 0), 0);
-
-      setPayouts(myPayouts);
-      setTotalEarnings(total);
-      setPendingEarnings(pendingSum);
-      setCompletedCount(myPayouts.length);
-    } else {
+    try {
+      const response = await api.getLandownerEarnings();
+      const payload = response?.data || response || {};
+      const transactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+      setPayouts(transactions);
+      setTotalEarnings(Number(payload.total_earnings || 0));
+      setPendingEarnings(Number(payload.pending_payments ?? payload.pending_earnings ?? 0));
+      setCompletedCount(Number(payload.completed_payouts ?? transactions.length));
+    } catch (err) {
+      console.error('Failed to load landowner earnings:', err);
       setPayouts([]);
       setTotalEarnings(0);
       setPendingEarnings(0);
       setCompletedCount(0);
     }
-
     setLoading(false);
   };
 

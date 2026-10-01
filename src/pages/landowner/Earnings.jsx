@@ -20,12 +20,13 @@ export default function Earnings() {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getLandownerEarnings();
-      const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+      const response = await api.getLandownerEarnings();
+      const payload = response?.data || response || {};
+      const transactions = Array.isArray(payload.transactions) ? payload.transactions : [];
       setPayouts(transactions);
-      setTotalEarnings(Number(data.total_earnings || 0));
-      setPendingEarnings(Number(data.pending_earnings || 0));
-      setCompletedCount(Number(data.completed_payouts || transactions.length));
+      setTotalEarnings(Number(payload.total_earnings || 0));
+      setPendingEarnings(Number(payload.pending_payments ?? payload.pending_earnings ?? 0));
+      setCompletedCount(Number(payload.completed_payouts ?? transactions.length));
     } catch (err) {
       console.error('Failed to load landowner earnings:', err);
       setPayouts([]);

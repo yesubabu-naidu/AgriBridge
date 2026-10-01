@@ -30,7 +30,9 @@ export default function FarmerPayment() {
     e.preventDefault();
     setSubmitting(true);
 
-    const amount = Number(lease.annual_price || 40000);
+    const duration = Number(lease.lease_duration_months || lease.proposed_duration_months || 12);
+    const basePrice = Number(lease.annual_price || 40000);
+    const amount = Number(lease.total_amount ?? lease.total_lease_amount) || Math.round((basePrice * (duration / 12)) * 100) / 100;
 
     const res = await api.makeFarmerPayment({
       leaseId: lease.id,
@@ -45,10 +47,12 @@ export default function FarmerPayment() {
       return;
     }
 
+    const paidAmount = Number(res.amount || res.total_payment || amount);
+
     navigate('/payment/success', {
       state: {
         transaction_id: res.transaction_id || `AGRI${Date.now()}`,
-        amount,
+        amount: paidAmount,
         role: 'farmer'
       }
     });
@@ -62,12 +66,11 @@ export default function FarmerPayment() {
     );
   }
 
+  const duration = Number(lease.lease_duration_months || lease.proposed_duration_months || 12);
   const basePrice = Number(lease.annual_price || 40000);
-
-  // The backend records the lease annual price only.
+  const total = Number(lease.total_amount ?? lease.total_lease_amount) || Math.round((basePrice * (duration / 12)) * 100) / 100;
   const platformFee = 0;
   const gst = 0;
-  const total = basePrice;
 
   return (
     <div className="farmer-payment-page">
@@ -241,27 +244,27 @@ export default function FarmerPayment() {
                 </span>
 
                 <span>
-                  ₹{basePrice.toLocaleString()}
+                  ₹{basePrice.toLocaleString()}/year
                 </span>
               </div>
 
               <div className="d-flex justify-content-between">
                 <span className="text-muted">
-                  Platform Facilitation Fee
+                  Lease Duration
                 </span>
 
                 <span>
-                  ₹{platformFee.toLocaleString()}
+                  {duration} Months
                 </span>
               </div>
 
               <div className="d-flex justify-content-between">
                 <span className="text-muted">
-                  GST & Taxes (2%)
+                  Calculation (Annual × Duration / 12)
                 </span>
 
                 <span>
-                  ₹{gst.toLocaleString()}
+                  ₹{basePrice.toLocaleString()} × ({duration} / 12)
                 </span>
               </div>
             </div>

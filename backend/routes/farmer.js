@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import { query, withTransaction } from "../config/db.js";
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
+import { calculateTotalLeaseAmount, getLeaseDurationMonths } from "../services/leaseService.js";
 
 const router = express.Router();
 
@@ -37,15 +38,29 @@ router.get('/dashboard', authenticateToken, authorizeRoles('farmer'), async (req
 router.get('/leases', authenticateToken, authorizeRoles('farmer'), async (req, res) => {
   try {
     const leases = await query(
-      `SELECT les.*, l.land_name, l.location, l.acres, l.land_name AS land_type, l.acres AS area_acres, COALESCE(NULLIF(u.full_name, ''), u.email) AS owner_name, u.phone AS owner_phone
+      `SELECT les.*,
+              COALESCE(app.proposed_duration_months, l.lease_duration_months, 12) AS lease_duration_months,
+              l.land_name, l.location, l.acres, l.land_name AS land_type, l.acres AS area_acres,
+              COALESCE(NULLIF(u.full_name, ''), u.email) AS owner_name, u.phone AS owner_phone
        FROM leases les
        JOIN lands l ON les.land_id = l.id
        JOIN users u ON les.owner_id = u.id
+       LEFT JOIN lease_applications app ON les.application_id = app.id
        WHERE les.farmer_id = ?
        ORDER BY les.created_at DESC`,
       [req.user.id]
     );
-    return res.json({ success: true, data: leases });
+    const enriched = leases.map(lease => {
+      const duration = getLeaseDurationMonths(lease);
+      const totalAmount = calculateTotalLeaseAmount(lease.annual_price, duration);
+      return {
+        ...lease,
+        lease_duration_months: duration,
+        total_amount: totalAmount,
+        total_lease_amount: totalAmount
+      };
+    });
+    return res.json({ success: true, data: enriched });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -169,29 +184,69 @@ router.post("/payment", authenticateToken, authorizeRoles("farmer"), async (req,
       return res.status(400).json({ success: false, message: "Provide a valid lease and payment method." });
     }
     const payment = await withTransaction(async (tx) => {
-      const leases = await tx("SELECT id, annual_price FROM leases WHERE id = ? AND farmer_id = ? AND status = ? AND payment_status = ?", [leaseId, req.user.id, "active", "pending"]);
-      if (!leases.length) { const error = new Error("This lease cannot be paid, or has already been paid."); error.status = 409; throw error; }
-      const amount = Number(leases[0].annual_price);
-      const paid = await tx("UPDATE leases SET payment_status = ? WHERE id = ? AND farmer_id = ? AND status = ? AND payment_status = ?", ["paid", leaseId, req.user.id, "active", "pending"]);
-      if (!paid.affectedRows) { const error = new Error("This lease payment was already processed."); error.status = 409; throw error; }
-      const txId = "AGRI-" + Date.now() + "-" + crypto.randomBytes(5).toString("hex");
-      await tx("INSERT INTO payments (reference_type, reference_id, payer_id, amount, payment_method, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)", ["lease", leaseId, req.user.id, amount, paymentMethod, "successful", txId]);
-      // Record the farmer's debit transaction.
-      await tx("INSERT INTO transactions (transaction_id, user_id, type, amount, payment_method, status, reference_id, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [txId, req.user.id, "lease_payment", amount, paymentMethod, "successful", "LEASE-" + leaseId, "Lease fee payment"]);
-
-      // Record the matching landowner credit using the same lease payment.
-      // The transactions table is user-owned, so the landowner receives a
-      // separate row rather than sharing the farmer's transaction row.
-      const ownerRows = await tx("SELECT owner_id FROM leases WHERE id = ?", [leaseId]);
-      const ownerId = ownerRows[0]?.owner_id;
-      if (!ownerId) {
-        throw Object.assign(new Error("Unable to resolve the landowner for this lease."), { status: 500 });
+      const leases = await tx(
+        `SELECT les.id, les.annual_price, les.start_date, les.end_date, les.owner_id, les.farmer_id,
+                COALESCE(app.proposed_duration_months, l.lease_duration_months, 12) AS duration_months,
+                l.land_name,
+                COALESCE(NULLIF(farmer.full_name, ''), farmer.email) AS farmer_name,
+                COALESCE(NULLIF(owner.full_name, ''), owner.email) AS owner_name
+         FROM leases les
+         JOIN lands l ON les.land_id = l.id
+         JOIN users owner ON les.owner_id = owner.id
+         JOIN users farmer ON les.farmer_id = farmer.id
+         LEFT JOIN lease_applications app ON les.application_id = app.id
+         WHERE les.id = ? AND les.farmer_id = ? AND les.status = ? AND les.payment_status = ?`,
+        [leaseId, req.user.id, "active", "pending"]
+      );
+      if (!leases.length) {
+        const error = new Error("This lease cannot be paid, or has already been paid.");
+        error.status = 409;
+        throw error;
       }
+      const lease = leases[0];
+      const annualPrice = Number(lease.annual_price) || 0;
+      const durationMonths = getLeaseDurationMonths(lease);
+      const totalAmount = calculateTotalLeaseAmount(annualPrice, durationMonths);
 
+      const paid = await tx(
+        "UPDATE leases SET payment_status = ? WHERE id = ? AND farmer_id = ? AND status = ? AND payment_status = ?",
+        ["paid", leaseId, req.user.id, "active", "pending"]
+      );
+      if (!paid.affectedRows) {
+        const error = new Error("This lease payment was already processed.");
+        error.status = 409;
+        throw error;
+      }
+      const txId = "AGRI-" + Date.now() + "-" + crypto.randomBytes(5).toString("hex");
+      await tx(
+        "INSERT INTO payments (reference_type, reference_id, payer_id, amount, payment_method, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ["lease", leaseId, req.user.id, totalAmount, paymentMethod, "successful", txId]
+      );
+
+      // Record the farmer's debit transaction
+      const farmerDesc = `Lease fee payment for ${lease.land_name || 'land'} (Lease #${leaseId}, ₹${annualPrice.toLocaleString()}/yr, ${durationMonths} months, Total: ₹${totalAmount.toLocaleString()})`;
+      await tx(
+        "INSERT INTO transactions (transaction_id, user_id, type, amount, payment_method, status, reference_id, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [txId, req.user.id, "lease_payment", totalAmount, paymentMethod, "successful", "LEASE-" + leaseId, farmerDesc]
+      );
+
+      // Record the matching landowner credit transaction
       const ownerTxId = txId + "-OWNER";
-      await tx("INSERT INTO transactions (transaction_id, user_id, type, amount, payment_method, status, reference_id, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [ownerTxId, ownerId, "lease_payment", amount, paymentMethod, "successful", "LEASE-" + leaseId, "Lease payment received for land"]) ;
+      const ownerDesc = `Lease payment received from ${lease.farmer_name} for ${lease.land_name || 'land'} (Lease #${leaseId}, ₹${annualPrice.toLocaleString()}/yr, ${durationMonths} months, Total: ₹${totalAmount.toLocaleString()})`;
+      await tx(
+        "INSERT INTO transactions (transaction_id, user_id, type, amount, payment_method, status, reference_id, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [ownerTxId, lease.owner_id, "lease_payment", totalAmount, paymentMethod, "successful", "LEASE-" + leaseId, ownerDesc]
+      );
 
-      return { transaction_id: txId, amount, status: "successful" };
+      return {
+        transaction_id: txId,
+        amount: totalAmount,
+        total_payment: totalAmount,
+        annual_price: annualPrice,
+        duration_months: durationMonths,
+        status: "successful",
+        reference_id: "LEASE-" + leaseId
+      };
     });
     return res.json({ success: true, message: "Payment completed successfully", data: payment });
   } catch (error) {

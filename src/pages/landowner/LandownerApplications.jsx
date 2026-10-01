@@ -58,7 +58,12 @@ export default function LandownerApplications() {
                       <small className="text-muted">{app.farmer_email || 'farmer@agribridge.com'}</small>
                     </td>
                     <td>{app.land_name || 'Green Valley Farm'}</td>
-                    <td className="fw-bold text-success">₹{Number(app.proposed_price || 40000).toLocaleString()}/yr</td>
+                    <td>
+                      <div className="fw-bold text-success">₹{Number(app.proposed_price || 40000).toLocaleString()}/year</div>
+                      <small className="text-muted d-block">
+                        Total Lease Value: ₹{(Math.round((Number(app.proposed_price || 40000) * ((Number(app.proposed_duration_months) || 12) / 12)) * 100) / 100).toLocaleString()}
+                      </small>
+                    </td>
                     <td>{app.proposed_duration_months || 12} Months</td>
                     <td className="small text-muted" style={{ maxWidth: '240px' }}>{app.message || 'Intends organic crop cultivation'}</td>
                     <td><StatusBadge status={app.status} /></td>

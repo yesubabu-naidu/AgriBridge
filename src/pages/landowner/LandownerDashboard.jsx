@@ -71,22 +71,30 @@ export default function LandownerDashboard() {
               </tr>
             </thead>
             <tbody>
-              {(stats.recent_applications || []).map(app => (
-                <tr key={app.id}>
-                  <td>
-                    <div className="fw-bold">{app.farmer_name || 'Ramesh Babu'}</div>
-                  </td>
-                  <td>{app.land_name || 'Green Valley Farm'}</td>
-                  <td>₹{Number(app.proposed_price || 40000).toLocaleString()}/yr</td>
-                  <td>{app.proposed_duration_months || 12} Months</td>
-                  <td><StatusBadge status={app.status} /></td>
-                  <td>
-                    <Link to="/landowner/applications" className="btn btn-sm btn-outline-success">
-                      Review
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {(stats.recent_applications || []).map(app => {
+                const duration = Number(app.proposed_duration_months || 12);
+                const annualPrice = Number(app.proposed_price || 40000);
+                const totalLeaseValue = Math.round((annualPrice * (duration / 12)) * 100) / 100;
+                return (
+                  <tr key={app.id}>
+                    <td>
+                      <div className="fw-bold">{app.farmer_name || 'Ramesh Babu'}</div>
+                    </td>
+                    <td>{app.land_name || 'Green Valley Farm'}</td>
+                    <td>
+                      <div className="fw-bold">₹{annualPrice.toLocaleString()}/yr</div>
+                      <small className="text-muted d-block">Total Lease Value: ₹{totalLeaseValue.toLocaleString()}</small>
+                    </td>
+                    <td>{duration} Months</td>
+                    <td><StatusBadge status={app.status} /></td>
+                    <td>
+                      <Link to="/landowner/applications" className="btn btn-sm btn-outline-success">
+                        Review
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

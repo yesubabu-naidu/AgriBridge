@@ -215,6 +215,9 @@ export default function LandDetails({ user }) {
             <option value={24}>24 Months (2 Years)</option>
             <option value={36}>36 Months (3 Years)</option>
           </select>
+          <small className="text-muted mt-1 d-block">
+            Estimated Total Lease Value: <strong className="text-success">₹{(Math.round((Number(proposedPrice || 0) * (Number(proposedMonths || 12) / 12)) * 100) / 100).toLocaleString()}</strong>
+          </small>
         </div>
 
         <div className="mb-3">

@@ -1580,35 +1580,32 @@ export const api = {
         );
 
         res.data = {
-
           ...res.data,
-
           total_earnings:
-
             Number(res.data.total_earnings || 0) > 0
-
               ? Number(res.data.total_earnings)
-
               : calculatedTotal,
-
           pending_payments:
-
-            Number(res.data.pending_payments || 0) > 0
-
-              ? Number(res.data.pending_payments)
-
+            Number(res.data.pending_payments ?? res.data.pending_earnings ?? 0) > 0
+              ? Number(res.data.pending_payments ?? res.data.pending_earnings)
               : calculatedPending,
-
+          pending_earnings:
+            Number(res.data.pending_payments ?? res.data.pending_earnings ?? 0) > 0
+              ? Number(res.data.pending_payments ?? res.data.pending_earnings)
+              : calculatedPending,
           completed_payouts:
-
             Number(res.data.completed_payouts || 0) > 0
-
               ? Number(res.data.completed_payouts)
-
               : successfulPayouts.length
-
         };
+      }
 
+      if (res?.data) {
+        res.total_earnings = res.data.total_earnings;
+        res.pending_payments = res.data.pending_payments;
+        res.pending_earnings = res.data.pending_earnings;
+        res.completed_payouts = res.data.completed_payouts;
+        res.transactions = res.data.transactions;
       }
 
       return res;
