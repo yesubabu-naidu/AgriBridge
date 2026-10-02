@@ -13,6 +13,7 @@ export default function BuyerPayment() {
 
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   const deliveryFee = 150;
   const platformFee = 50;
@@ -21,6 +22,7 @@ export default function BuyerPayment() {
   const handlePay = async () => {
     if (submitting) return;
     setSubmitting(true);
+    setError(null);
     try {
       const res = await api.makeBuyerPayment({
         items,
@@ -30,9 +32,12 @@ export default function BuyerPayment() {
       });
 
       if (!res?.success) {
-        alert(res?.message || "Unable to complete the crop purchase.");
+        setError(res?.message || "Unable to complete the crop purchase.");
+        setSubmitting(false);
         return;
       }
+
+      window.dispatchEvent(new CustomEvent('agribridge:cart-updated'));
 
       navigate('/payment/success', {
         state: {
@@ -43,7 +48,7 @@ export default function BuyerPayment() {
       });
     } catch (err) {
       console.error('Payment failed:', err);
-      alert("Something went wrong while processing your payment. Please try again.");
+      setError(err?.message || "Something went wrong while processing your payment. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -57,6 +62,13 @@ export default function BuyerPayment() {
           <h2 className="fw-black mb-1">Produce Checkout Payment</h2>
           <p className="text-muted small">Choose your payment mode to authorize produce shipment.</p>
         </div>
+
+        {error && (
+          <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
+            <i className="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+            <div className="fw-semibold">{error}</div>
+          </div>
+        )}
 
         <div className="payment-layout">
           <div>

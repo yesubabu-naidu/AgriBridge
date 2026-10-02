@@ -874,7 +874,13 @@ export const api = {
     }
 
     return result.filter((product) => product.status !== "out_of_stock" && Number(product.available_qty ?? product.quantity ?? 1) > 0);
+  },
 
+  async getProductById(id) {
+    productsStore = getStoredItem("agribridge_products", []);
+    const local = productsStore.find(p => String(p.id) === String(id)) || null;
+    const res = await fetchWithFallback(`/farmer/products/${encodeURIComponent(id)}`, { method: "GET" }, local);
+    return res.isMock ? local : (res.data || null);
   },
 
   async getMyProducts() {
@@ -1174,6 +1180,12 @@ export const api = {
 
   },
 
+  async validateCartStock() {
+
+    return fetchWithFallback('/buyer/cart/validate', { method: 'POST' }, { success: true });
+
+  },
+
   // PAYMENTS & TRANSACTIONS
 
   async makeFarmerPayment({ leaseId, amount, paymentMethod }) {
@@ -1412,10 +1424,36 @@ export const api = {
 
     const ownedTransactions = transactionsStore.filter(tx => belongsToUser(tx, user, 'user_id', ['user_email']));
 
-    const res = await fetchWithFallback('/farmer/transactions', { method: 'GET' }, ownedTransactions);
+    const endpoint = user?.role === 'buyer' ? '/buyer/transactions' : user?.role === 'admin' ? '/admin/transactions' : '/farmer/transactions';
 
-    return Array.isArray(res.data) ? res.data : ownedTransactions
+    const res = await fetchWithFallback(endpoint, { method: 'GET' }, ownedTransactions);
 
+    return Array.isArray(res.data) ? res.data : ownedTransactions;
+
+  },
+
+  async downloadReceipt(id) {
+    const token = localStorage.getItem('agribridge_token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${API_BASE_URL}/transactions/${encodeURIComponent(id)}/receipt`, {
+      method: 'GET',
+      headers
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Unable to download transaction receipt PDF.');
+    }
+    const blob = await res.blob();
+    const filename = `AgriBridge_Receipt_${String(id).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 15000);
+    return true;
   },
 
   async getLandownerEarnings() {

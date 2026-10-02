@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import StatusBadge from '../../components/StatusBadge';
+import DownloadReceiptButton from '../../components/DownloadReceiptButton';
 import { api } from '../../services/api';
 
 export default function AdminTransactions() {
@@ -40,6 +41,7 @@ export default function AdminTransactions() {
                   <th>Payment Method</th>
                   <th>Status</th>
                   <th>Timestamp</th>
+                  <th className="text-end">Receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -52,6 +54,13 @@ export default function AdminTransactions() {
                     <td>{tx.payment_method}</td>
                     <td><StatusBadge status={tx.status} /></td>
                     <td className="small text-muted">{tx.created_at}</td>
+                    <td className="text-end">
+                      <DownloadReceiptButton 
+                        transactionId={tx.transaction_id || tx.id}
+                        className="btn-outline-success btn-sm py-1 px-2"
+                        label="PDF"
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import { query, withTransaction } from "../config/db.js";
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
+import { buildOrderConfirmationEmail, sendEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -121,15 +122,57 @@ router.put("/cart/:id", authenticateToken, authorizeRoles("buyer"), async (req, 
     const cartId = Number(req.params.id);
     const quantity = Number(req.body.quantity);
     if (!Number.isInteger(cartId) || cartId <= 0 || !Number.isFinite(quantity) || quantity <= 0) {
-      return res.status(400).json({ success: false, message: "Quantity must be greater than zero." });
+      return res.status(400).json({ success: false, message: "Quantity must be a positive whole number." });
     }
-    const rows = await query("SELECT c.id, p.available_qty, p.status FROM cart c JOIN products p ON p.id = c.product_id WHERE c.id = ? AND c.user_id = ?", [cartId, req.user.id]);
+    const rows = await query("SELECT c.id, p.product_name, p.available_qty, p.status FROM cart c JOIN products p ON p.id = c.product_id WHERE c.id = ? AND c.user_id = ?", [cartId, req.user.id]);
     if (!rows.length) return res.status(404).json({ success: false, message: "Cart item not found." });
-    if (String(rows[0].status || "").trim().toLowerCase() !== "available" || quantity > Number(rows[0].available_qty)) {
-      return res.status(409).json({ success: false, message: "Requested quantity exceeds available crop stock." });
+    const available = Number(rows[0].available_qty || 0);
+    if (String(rows[0].status || "").trim().toLowerCase() !== "available" || available <= 0) {
+      return res.status(409).json({ success: false, message: `"${rows[0].product_name}" is currently out of stock.` });
+    }
+    if (quantity > available) {
+      return res.status(409).json({ success: false, message: `Only ${available} units of "${rows[0].product_name}" are currently available.` });
     }
     await query("UPDATE cart SET quantity = ? WHERE id = ? AND user_id = ?", [quantity, cartId, req.user.id]);
-    return res.json({ success: true, message: "Cart updated", data: { cart_id: cartId, quantity } });
+    return res.json({ success: true, message: "Cart updated", data: { cart_id: cartId, quantity, available_qty: available } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/cart/validate
+router.post("/cart/validate", authenticateToken, authorizeRoles("buyer"), async (req, res) => {
+  try {
+    const items = await query(
+      `SELECT c.id AS cart_id, c.quantity, p.id AS product_id, p.product_name, p.available_qty, p.status, p.price_per_unit
+       FROM cart c
+       JOIN products p ON c.product_id = p.id
+       WHERE c.user_id = ?`,
+      [req.user.id]
+    );
+    if (!items.length) {
+      return res.status(400).json({ success: false, message: "Your shopping cart is empty." });
+    }
+    for (const item of items) {
+      const avail = Number(item.available_qty || 0);
+      const reqQty = Number(item.quantity || 0);
+      if (String(item.status || "").trim().toLowerCase() !== "available" || avail <= 0) {
+        return res.status(409).json({
+          success: false,
+          message: `"${item.product_name}" is currently out of stock.`,
+          outOfStockProduct: item.product_id
+        });
+      }
+      if (reqQty > avail) {
+        return res.status(409).json({
+          success: false,
+          message: `Only ${avail} units of "${item.product_name}" are currently available.`,
+          insufficientStockProduct: item.product_id,
+          available_qty: avail
+        });
+      }
+    }
+    return res.json({ success: true, message: "All cart items are available in stock." });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -170,12 +213,27 @@ router.post("/orders", authenticateToken, authorizeRoles("buyer"), async (req, r
       const lineItems = [];
       let totalAmount = 0;
       for (const [productId, quantity] of quantities) {
-        const products = await tx("SELECT id, farmer_id, product_name, price_per_unit, available_qty FROM products WHERE id = ? AND LOWER(TRIM(status)) = ?", [productId, "available"]);
-        if (!products.length) { const error = new Error("One or more crops are unavailable."); error.status = 409; throw error; }
+        // Row locking prevents race conditions and over-selling
+        const products = await tx("SELECT id, farmer_id, product_name, price_per_unit, available_qty FROM products WHERE id = ? AND LOWER(TRIM(status)) = ? FOR UPDATE", [productId, "available"]);
+        if (!products.length) {
+          const error = new Error("One or more crops are currently unavailable.");
+          error.status = 409;
+          throw error;
+        }
         const product = products[0];
+        const avail = Number(product.available_qty || 0);
+        if (quantity > avail) {
+          const error = new Error(`Only ${avail} units of "${product.product_name}" are currently available.`);
+          error.status = 409;
+          throw error;
+        }
         const unitPrice = Number(product.price_per_unit);
         const stock = await tx("UPDATE products SET available_qty = available_qty - ?, status = CASE WHEN available_qty - ? <= 0 THEN ? ELSE ? END WHERE id = ? AND LOWER(TRIM(status)) = ? AND available_qty >= ?", [quantity, quantity, "out_of_stock", "available", productId, "available", quantity]);
-        if (!stock.affectedRows) { const error = new Error("One or more crops no longer have enough stock."); error.status = 409; throw error; }
+        if (!stock.affectedRows) {
+          const error = new Error(`Only ${avail} units of "${product.product_name}" are currently available.`);
+          error.status = 409;
+          throw error;
+        }
         lineItems.push({ productId, farmerId: product.farmer_id, quantity, unitPrice, subtotal: unitPrice * quantity, productName: product.product_name });
         totalAmount += unitPrice * quantity;
       }
@@ -185,7 +243,7 @@ router.post("/orders", authenticateToken, authorizeRoles("buyer"), async (req, r
       const grandTotal = totalAmount + deliveryFee + platformFee;
       const created = await tx("INSERT INTO orders (buyer_id, total_amount, delivery_fee, platform_fee, grand_total, shipping_address, payment_method, payment_status, order_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [req.user.id, totalAmount, deliveryFee, platformFee, grandTotal, shippingAddress.slice(0, 2000), paymentMethod, "successful", "processing"]);
       for (const item of lineItems) {
-        await tx("INSERT INTO order_items (order_id, product_id, farmer_id, crop_name, quantity_kg, price_per_kg, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)", [created.insertId, item.productId, item.farmerId, item.productName, item.quantity, item.unitPrice, item.subtotal]);
+        await tx("INSERT INTO order_items (order_id, product_id, farmer_id, crop_name, quantity_kg, price_per_kg, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [created.insertId, item.productId, item.farmerId, item.productName, item.quantity, item.unitPrice, item.quantity, item.unitPrice, item.subtotal]);
       }
       const txId = "AGRI-" + Date.now() + "-" + crypto.randomBytes(5).toString("hex");
       await tx("INSERT INTO payments (reference_type, reference_id, payer_id, amount, payment_method, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)", ["order", created.insertId, req.user.id, grandTotal, paymentMethod, "successful", txId]);
@@ -197,17 +255,41 @@ router.post("/orders", authenticateToken, authorizeRoles("buyer"), async (req, r
       return { order_id: created.insertId, transaction_id: txId, grand_total: grandTotal };
     });
 
+    // Send commercial order confirmation email to the buyer
+    (async () => {
+      try {
+        const buyers = await query("SELECT id, full_name, email FROM users WHERE id = ?", [req.user.id]);
+        if (buyers.length && buyers[0].email) {
+          const buyer = buyers[0];
+          const emailHtml = buildOrderConfirmationEmail({
+            order: { id: order.order_id, total_amount: order.grand_total - 200, delivery_fee: 150, platform_fee: 50, grand_total: order.grand_total, shipping_address: shippingAddress, payment_method: paymentMethod },
+            buyer,
+            items: rawItems,
+            txId: order.transaction_id
+          });
+          await sendEmail({
+            to: buyer.email,
+            subject: `Order Confirmation #ORD-00${order.order_id} — AgriBridge`,
+            html: emailHtml,
+            text: `Your AgriBridge order #ORD-00${order.order_id} for ₹${order.grand_total} has been confirmed.`
+          });
+        }
+      } catch (mailErr) {
+        console.error('Order confirmation email note:', mailErr.message);
+      }
+    })();
+
     return res.status(201).json({ success: true, message: "Order created successfully", data: order });
   } catch (error) {
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 });
 
-// GET /api/orders
+// GET /api/buyer/orders
 router.get("/orders", authenticateToken, authorizeRoles("buyer"), async (req, res) => {
   try {
     const orders = await query("SELECT *, order_status FROM orders WHERE buyer_id = ? ORDER BY created_at DESC", [req.user.id]);
-    const items = await query("SELECT oi.id, oi.order_id, oi.product_id AS product_id, oi.farmer_id, oi.crop_name AS product_name, oi.quantity_kg AS quantity, oi.price_per_kg AS unit_price, oi.subtotal FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.buyer_id = ?", [req.user.id]);
+    const items = await query("SELECT oi.id, oi.order_id, oi.product_id AS product_id, oi.farmer_id, oi.crop_name AS product_name, COALESCE(oi.quantity_kg, oi.quantity) AS quantity, COALESCE(oi.price_per_kg, oi.unit_price) AS unit_price, oi.subtotal FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.buyer_id = ?", [req.user.id]);
     const itemsByOrder = new Map();
     for (const item of items) {
       const orderItems = itemsByOrder.get(String(item.order_id)) || [];
@@ -215,6 +297,22 @@ router.get("/orders", authenticateToken, authorizeRoles("buyer"), async (req, re
       itemsByOrder.set(String(item.order_id), orderItems);
     }
     return res.json({ success: true, data: orders.map((order) => ({ ...order, items: itemsByOrder.get(String(order.id)) || [] })) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/buyer/transactions
+router.get("/transactions", authenticateToken, authorizeRoles("buyer"), async (req, res) => {
+  try {
+    const txs = await query(
+      `SELECT t.*
+       FROM transactions t
+       WHERE t.user_id = ?
+       ORDER BY t.created_at DESC`,
+      [req.user.id]
+    );
+    return res.json({ success: true, data: txs });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

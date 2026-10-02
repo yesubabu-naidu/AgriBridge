@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
+import DownloadReceiptButton from '../../components/DownloadReceiptButton';
 import { api } from '../../services/api';
 
 export default function BuyerTransactions() {
@@ -14,7 +15,7 @@ export default function BuyerTransactions() {
   const loadTransactions = async () => {
     setLoading(true);
     const data = await api.getTransactions();
-    setTxs(data);
+    setTxs(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
@@ -23,7 +24,7 @@ export default function BuyerTransactions() {
       <div className="mb-4">
         <span className="eyebrow">BUYER PAYMENTS</span>
         <h2 className="fw-black mb-1">Transaction History</h2>
-        <p className="text-muted small">View checkout payment history and download invoices.</p>
+        <p className="text-muted small">View checkout payment history and download official tax invoices.</p>
       </div>
 
       {loading ? (
@@ -42,6 +43,7 @@ export default function BuyerTransactions() {
                   <th>Amount</th>
                   <th>Status</th>
                   <th>Date</th>
+                  <th>Receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -52,7 +54,10 @@ export default function BuyerTransactions() {
                     <td>{tx.payment_method}</td>
                     <td className="fw-bold text-success">₹{Number(tx.amount).toLocaleString()}</td>
                     <td><StatusBadge status={tx.status} /></td>
-                    <td className="small text-muted">{tx.created_at}</td>
+                    <td className="small text-muted">{new Date(tx.created_at).toLocaleDateString('en-IN')}</td>
+                    <td>
+                      <DownloadReceiptButton transactionId={tx.transaction_id || tx.id} label="Receipt" />
+                    </td>
                   </tr>
                 ))}
               </tbody>

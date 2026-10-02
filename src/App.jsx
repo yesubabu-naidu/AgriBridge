@@ -30,6 +30,7 @@ import Earnings from './pages/landowner/Earnings';
 import FarmerDashboard from './pages/farmer/FarmerDashboard';
 import MyCrops from './pages/farmer/MyCrops';
 import AddCrop from './pages/farmer/AddCrop';
+import EditCrop from './pages/farmer/EditCrop';
 import Leases from './pages/farmer/Leases';
 import FarmerPayment from './pages/farmer/FarmerPayment';
 import FarmerTransactions from './pages/farmer/FarmerTransactions';
@@ -216,6 +217,7 @@ export default function App() {
                 <Route path="/farmer/irrigation" element={<SmartIrrigation />} />
                 <Route path="/farmer/my-crops" element={<MyCrops />} />
                 <Route path="/farmer/add-crop" element={<AddCrop />} />
+                <Route path="/farmer/my-crops/:id/edit" element={<EditCrop />} />
                 <Route path="/farmer/leases" element={<Leases />} />
                 <Route path="/farmer/payment/:leaseId" element={<FarmerPayment />} />
                 <Route path="/farmer/transactions" element={<FarmerTransactions />} />

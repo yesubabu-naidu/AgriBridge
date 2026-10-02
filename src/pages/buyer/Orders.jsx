@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
+import DownloadReceiptButton from '../../components/DownloadReceiptButton';
 import { api } from '../../services/api';
 
 export default function Orders() {
@@ -23,7 +24,7 @@ export default function Orders() {
       <div className="mb-4">
         <span className="eyebrow">PURCHASE HISTORY</span>
         <h2 className="fw-black mb-1">My Orders</h2>
-        <p className="text-muted small">Track your produce purchases and delivery status.</p>
+        <p className="text-muted small">Track your produce purchases and download official tax receipts.</p>
       </div>
 
       {loading ? (
@@ -34,14 +35,15 @@ export default function Orders() {
         <div className="d-grid gap-4">
           {orders.map(order => (
             <div className="card border-0 shadow-sm rounded-4 p-4 bg-white" key={order.id}>
-              <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-3 border-bottom">
+              <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-3 border-bottom gap-2">
                 <div>
                   <h6 className="fw-bold mb-0">Order #ORD-00{order.id}</h6>
-                  <small className="text-muted">Placed on {order.created_at || '2026-08-28'}</small>
+                  <small className="text-muted">Placed on {new Date(order.created_at || Date.now()).toLocaleDateString('en-IN')}</small>
                 </div>
-                <div className="d-flex align-items-center gap-3">
+                <div className="d-flex align-items-center gap-3 flex-wrap">
                   <StatusBadge status={order.order_status || 'delivered'} />
                   <span className="fw-bold text-success fs-5">₹{Number(order.grand_total || 5867.50).toLocaleString()}</span>
+                  <DownloadReceiptButton orderId={order.id} label="Download Receipt" />
                 </div>
               </div>
 

@@ -13,14 +13,37 @@ export default function Checkout() {
 
   const loadCart = async () => {
     const data = await api.getCart();
-    setCart(data);
+    setCart(Array.isArray(data) ? data : []);
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price_per_unit * item.quantity, 0);
+  const [stockError, setStockError] = useState(null);
+  const [validating, setValidating] = useState(false);
 
-  const handleNext = (e) => {
+  const subtotal = cart.reduce((sum, item) => sum + (Number(item.price_per_unit) || 0) * (Number(item.quantity) || 0), 0);
+
+  const handleNext = async (e) => {
     e.preventDefault();
-    navigate('/buyer/payment', { state: { address, totalAmount: subtotal, items: cart } });
+    if (validating) return;
+    if (!cart.length) {
+      setStockError('Your cart is empty.');
+      return;
+    }
+
+    setValidating(true);
+    setStockError(null);
+    try {
+      const check = await api.validateCartStock();
+      if (!check?.success) {
+        setStockError(check?.message || 'One or more items exceed available stock.');
+        setValidating(false);
+        return;
+      }
+      navigate('/buyer/payment', { state: { address, totalAmount: subtotal, items: cart } });
+    } catch (err) {
+      setStockError('Unable to verify available inventory. Please try again.');
+    } finally {
+      setValidating(false);
+    }
   };
 
   return (
@@ -31,6 +54,13 @@ export default function Checkout() {
           <h2 className="fw-black mb-1">Shipping & Delivery Details</h2>
           <p className="text-muted small">Enter your commercial shipping address and confirm your produce order.</p>
         </div>
+
+        {stockError && (
+          <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
+            <i className="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+            <div className="fw-semibold">{stockError}</div>
+          </div>
+        )}
 
         <div className="row g-4">
           <div className="col-lg-7">

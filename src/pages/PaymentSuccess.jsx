@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import DownloadReceiptButton from '../components/DownloadReceiptButton';
 
 export default function PaymentSuccess() {
   const location = useLocation();
@@ -21,7 +22,7 @@ export default function PaymentSuccess() {
               </div>
 
               <h2 className="fw-black text-dark mb-1">Payment Successful!</h2>
-              <p className="text-muted mb-4">Your transaction has been securely recorded on Cloud MySQL.</p>
+              <p className="text-muted mb-4">Your transaction has been securely recorded and verified.</p>
 
               <div className="p-4 bg-light rounded-4 mb-4 text-start">
                 <div className="d-flex justify-content-between mb-2">
@@ -38,17 +39,18 @@ export default function PaymentSuccess() {
                 </div>
                 <div className="d-flex justify-content-between">
                   <span className="text-muted small">Date & Time:</span>
-                  <small className="text-muted">{new Date().toLocaleString()}</small>
+                  <small className="text-muted">{new Date().toLocaleString('en-IN')}</small>
                 </div>
               </div>
 
               <div className="d-grid gap-2">
-                <button 
-                  className="btn btn-outline-success py-2 fw-bold"
-                  onClick={() => alert(`Receipt downloaded for transaction ${txId}`)}
-                >
-                  <i className="bi bi-download me-2"></i> Download Receipt
-                </button>
+                <DownloadReceiptButton
+                  transactionId={txId}
+                  label="Download Official Receipt"
+                  variant="outline-success"
+                  size="md"
+                  className="py-2 fw-bold justify-content-center"
+                />
                 <Link to={`/${role}/dashboard`} className="btn btn-success py-2 fw-bold">
                   Go to {role.toUpperCase()} Dashboard <i className="bi bi-arrow-right ms-1"></i>
                 </Link>

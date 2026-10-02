@@ -1,0 +1,316 @@
+/* ==========================================================================
+   AgriBridge Professional & Commercial UI Animations
+   Engineered for subtle, smooth, high-fidelity commercial experience.
+   Respects prefers-reduced-motion and optimizes GPU-accelerated transforms.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Keyframe Animations
+   -------------------------------------------------------------------------- */
+
+@keyframes abFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes abFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes abFadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes abScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes abShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes abPulseSubtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.88;
+    transform: scale(1.02);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. Page & Layout Entrance Transitions
+   -------------------------------------------------------------------------- */
+
+.page-enter,
+.dash-content,
+.dashboard-container {
+  animation: abFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: abFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in-up {
+  animation: abFadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Stagger entrance for headings and introductory paragraphs */
+h1, h2, .eyebrow {
+  animation: abFadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* --------------------------------------------------------------------------
+   3. Cards, Containers & Stat Panels
+   -------------------------------------------------------------------------- */
+
+.card,
+.stat-card,
+.stat-pill,
+.produce-card,
+.land-card {
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease;
+  will-change: transform, box-shadow;
+}
+
+.card:hover,
+.stat-card:hover,
+.produce-card:hover,
+.land-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px -5px rgba(22, 101, 52, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Dashboard stat entrance */
+.stat-card,
+.stat-pill {
+  animation: abFadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* --------------------------------------------------------------------------
+   4. Buttons & Interactive Controls
+   -------------------------------------------------------------------------- */
+
+.btn {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.18s ease,
+              border-color 0.18s ease,
+              color 0.18s ease !important;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-success,
+.btn-primary {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-success:hover:not(:disabled),
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(46, 125, 50, 0.35) !important;
+}
+
+/* Icon rotation / nudge inside buttons on hover */
+.btn:hover:not(:disabled) i.bi-arrow-right {
+  transform: translateX(3px);
+  transition: transform 0.2s ease;
+}
+
+.btn:hover:not(:disabled) i.bi-arrow-left {
+  transform: translateX(-3px);
+  transition: transform 0.2s ease;
+}
+
+/* --------------------------------------------------------------------------
+   5. Product and Land Card Images (Zoom effect)
+   -------------------------------------------------------------------------- */
+
+.card .ratio img,
+.produce-card img,
+.land-card img,
+.product-card-img-wrap img {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:hover .ratio img,
+.produce-card:hover img,
+.land-card:hover img,
+.product-card-img-wrap:hover img {
+  transform: scale(1.04);
+}
+
+/* --------------------------------------------------------------------------
+   6. Forms & Inputs
+   -------------------------------------------------------------------------- */
+
+.form-control,
+.form-select {
+  transition: border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              background-color 0.2s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+  transform: none;
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15) !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Tables & Lists
+   -------------------------------------------------------------------------- */
+
+.table tbody tr {
+  transition: background-color 0.18s ease;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(46, 125, 50, 0.035);
+}
+
+/* --------------------------------------------------------------------------
+   8. Modals & Dialogs
+   -------------------------------------------------------------------------- */
+
+.modal.fade .modal-dialog {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.28s ease-out;
+  transform: scale(0.96) translateY(-10px);
+}
+
+.modal.show .modal-dialog {
+  transform: scale(1) translateY(0);
+}
+
+.modal-backdrop.fade {
+  transition: opacity 0.25s linear;
+}
+
+/* Custom modal overlay animation if used */
+.custom-modal-content {
+  animation: abScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* --------------------------------------------------------------------------
+   9. Dropdowns & Badges
+   -------------------------------------------------------------------------- */
+
+.dropdown-menu {
+  animation: abFadeInDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top;
+}
+
+.dropdown-item {
+  transition: background-color 0.15s ease,
+              color 0.15s ease,
+              padding-left 0.15s ease;
+}
+
+.dropdown-item:hover {
+  padding-left: 1.25rem;
+}
+
+.badge {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+/* --------------------------------------------------------------------------
+   10. Alerts, Toasts & Banners
+   -------------------------------------------------------------------------- */
+
+.alert {
+  animation: abFadeInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* --------------------------------------------------------------------------
+   11. Skeleton & Loading States
+   -------------------------------------------------------------------------- */
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: abShimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+.spinner-border {
+  animation: spinner-border 0.75s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
+   12. Navbar and Mobile Transitions
+   -------------------------------------------------------------------------- */
+
+.site-nav {
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.mobile-nav-menu,
+.navbar-collapse {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------------------------------------------------------
+   13. Accessibility: Respect prefers-reduced-motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card:hover,
+  .btn:hover,
+  .produce-card:hover,
+  .land-card:hover,
+  .product-card-img-wrap:hover img {
+    transform: none !important;
+  }
+}

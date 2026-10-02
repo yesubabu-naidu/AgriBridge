@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
+import DownloadReceiptButton from '../../components/DownloadReceiptButton';
 import { api } from '../../services/api';
 
 export default function FarmerTransactions() {
@@ -14,7 +15,7 @@ export default function FarmerTransactions() {
   const loadTransactions = async () => {
     setLoading(true);
     const data = await api.getTransactions();
-    setTxs(data);
+    setTxs(Array.isArray(data) ? data : []);
     setLoading(false);
   };
 
@@ -53,14 +54,9 @@ export default function FarmerTransactions() {
                     <td>{tx.payment_method}</td>
                     <td className="fw-bold text-success">₹{Number(tx.amount).toLocaleString()}</td>
                     <td><StatusBadge status={tx.status} /></td>
-                    <td className="small text-muted">{tx.created_at}</td>
+                    <td className="small text-muted">{new Date(tx.created_at).toLocaleDateString('en-IN')}</td>
                     <td>
-                      <button 
-                        className="btn btn-sm btn-outline-success"
-                        onClick={() => alert(`Receipt downloaded for transaction ${tx.transaction_id}`)}
-                      >
-                        <i className="bi bi-download me-1"></i> Receipt
-                      </button>
+                      <DownloadReceiptButton transactionId={tx.transaction_id || tx.id} label="Receipt" />
                     </td>
                   </tr>
                 ))}

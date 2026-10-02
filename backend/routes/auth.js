@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { query } from '../config/db.js';
 import { getStoredAssetUrl } from '../services/storageService.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { buildOtpEmail } from '../services/emailService.js';
 import {
   BCRYPT_ROUNDS,
   getJwtSecret,
@@ -75,11 +76,18 @@ async function deliverCode(email, otp, subject, message) {
     }
   });
 
+  const html = buildOtpEmail({
+    code: otp,
+    actionType: subject || 'Verification',
+    userName: (email || '').split('@')[0]
+  });
+
   await transporter.sendMail({
-    from: `"AgriBridge Support" <${user}>`,
+    from: `"AgriBridge Security" <${user}>`,
     to: email,
-    subject,
-    text: `${message} ${otp}. This code expires in 10 minutes.`
+    subject: subject || 'AgriBridge Security Verification Code',
+    text: `${message} ${otp}. This code expires in 10 minutes.`,
+    html
   });
 }
 

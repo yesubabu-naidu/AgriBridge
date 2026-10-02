@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import StatCard from '../../components/StatCard';
 import ProductCard from '../../components/ProductCard';
 import StatusBadge from '../../components/StatusBadge';
+import DownloadReceiptButton from '../../components/DownloadReceiptButton';
 import { api } from '../../services/api';
 
 export default function BuyerDashboard() {
@@ -83,6 +84,7 @@ export default function BuyerDashboard() {
                 <th>Payment Method</th>
                 <th>Order Status</th>
                 <th>Date</th>
+                <th className="text-end">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -93,6 +95,13 @@ export default function BuyerDashboard() {
                   <td>{o.payment_method || 'UPI'}</td>
                   <td><StatusBadge status={o.order_status || 'delivered'} /></td>
                   <td className="small text-muted">{o.created_at || '2026-08-28'}</td>
+                  <td className="text-end">
+                    <DownloadReceiptButton 
+                      orderId={o.id}
+                      className="btn-outline-success btn-sm py-1 px-2"
+                      label="Receipt"
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

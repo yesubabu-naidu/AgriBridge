@@ -125,18 +125,21 @@ router.put('/:id', authenticateToken, authorizeRoles('landowner', 'admin'), uplo
     const land = await findOwnedLand(req.params.id, req.user);
     if (!land) return res.status(404).json({ success: false, message: 'Land listing not found for your account.' });
     const input = normalizeLandInput({ land_name: req.body.land_name ?? req.body.land_type ?? land.land_name, location: req.body.location ?? land.location, acres: req.body.acres ?? req.body.area_acres ?? land.acres, lease_price: req.body.lease_price ?? req.body.price_per_year ?? req.body.price_per_acre ?? land.lease_price, description: req.body.description ?? land.description });
-    await query('UPDATE lands SET location = ?, land_name = ?, acres = ?, lease_price = ?, description = ? WHERE id = ?', [input.location, input.land_name, input.acres, input.lease_price, input.description || null, land.id]);
+    await query('UPDATE lands SET location = ?, land_name = ?, acres = ?, lease_price = ?, description = ?, soil_type = COALESCE(?, soil_type), updated_at = NOW() WHERE id = ?', [input.location, input.land_name, input.acres, input.lease_price, input.description || null, req.body.soil_type || null, land.id]);
     if (req.file) {
       validateUpload(req.file);
       const existing = await query('SELECT id, cloudinary_public_id, cloudinary_resource_type FROM land_images WHERE land_id = ? AND is_primary = TRUE ORDER BY id LIMIT 1', [land.id]);
       uploadedAsset = await uploadBuffer({ publicId: makePublicId({ scope: 'lands', ownerId: land.owner_id, recordId: land.id, originalName: req.file.originalname }), buffer: req.file.buffer, contentType: req.file.mimetype, originalName: req.file.originalname });
-      await query('UPDATE lands SET image_url = ? WHERE id = ?', [uploadedAsset.url, land.id]);
       if (existing.length) {
-        await query('UPDATE land_images SET image_url = ?, cloudinary_public_id = ?, cloudinary_resource_type = ?, original_file_name = ?, mime_type = ?, file_size = ?, storage_provider = ? WHERE id = ?', [uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supbase', existing[0].id]);
+        await query('UPDATE land_images SET image_url = ?, cloudinary_public_id = ?, cloudinary_resource_type = ?, original_file_name = ?, mime_type = ?, file_size = ?, storage_provider = ? WHERE id = ?', [uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supabase', existing[0].id]);
         await cleanupAssets(existing);
-      } else await query('INSERT INTO land_images (land_id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, storage_provider, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)', [land.id, uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supbase']);
+      } else {
+        await query('INSERT INTO land_images (land_id, image_url, cloudinary_public_id, cloudinary_resource_type, original_file_name, mime_type, file_size, storage_provider, is_primary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)', [land.id, uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'supabase']);
+      }
     }
-    return res.json({ success: true, message: 'Land listing updated successfully' });
+    const updatedRows = await query(`SELECT ${LAND_SELECT}, ${ownerName} AS owner_name, u.email AS owner_email, u.phone AS owner_phone FROM lands l JOIN users u ON l.owner_id = u.id WHERE l.id = ?`, [land.id]);
+    const fullLand = updatedRows.length ? await attachImages(updatedRows[0]) : null;
+    return res.json({ success: true, message: 'Land listing updated successfully.', data: fullLand });
   } catch (error) { if (uploadedAsset) await cleanupAssets([uploadedAsset]); return fail(res, error); }
 });
 
