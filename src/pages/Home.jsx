@@ -15,8 +15,8 @@ export default function Home() {
       setLoading(true);
       const lands = await api.getLands();
       const products = await api.getProducts();
-      setFeaturedLands(lands.slice(0, 3));
-      setFeaturedProducts(products.slice(0, 3));
+      setFeaturedLands(Array.isArray(lands) ? lands : []);
+      setFeaturedProducts(Array.isArray(products) ? products : []);
       setLoading(false);
     }
     loadData();

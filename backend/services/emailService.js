@@ -1,4 +1,31 @@
 import nodemailer from 'nodemailer';
+import { query } from '../config/db.js';
+
+/**
+ * Reusable helper to look up a user's full_name from PostgreSQL by email address.
+ * Never derives username from email prefix or string splitting.
+ * Safe fallback to 'User'.
+ */
+export async function getUserNameByEmail(email) {
+  if (!email || typeof email !== 'string') return 'User';
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const rows = await query(
+      `
+      SELECT full_name
+      FROM users
+      WHERE LOWER(email) = LOWER(?)
+      LIMIT 1
+      `,
+      [cleanEmail]
+    );
+    const fullName = rows[0]?.full_name;
+    return (fullName && String(fullName).trim()) || 'User';
+  } catch (error) {
+    console.error('Failed to get user name by email:', error.message);
+    return 'User';
+  }
+}
 
 /**
  * AgriBridge Commercial Email Service
@@ -145,7 +172,7 @@ export function buildBaseEmailLayout({ title, preheader = '', bodyContent, actio
  */
 export function buildOtpEmail(params = {}) {
   const code = params.code || params.otp || '';
-  const userName = params.userName || params.name || 'Valued User';
+  const userName = params.userName || params.name || 'User';
   const actionType = params.actionType || params.purpose || 'verification';
   const isReset = actionType.toLowerCase().includes('password') || actionType.toLowerCase().includes('reset');
   const title = isReset ? 'AgriBridge Password Reset Code' : 'Verify Your AgriBridge Account';

@@ -86,6 +86,7 @@ router.put("/", authenticateToken, async (req, res) => {
           phone: String(phone || "").trim(),
           role: updatedUser.role,
           avatar: updatedUser.avatar || updatedUser.avatar_url || null,
+          avatar_url: updatedUser.avatar || updatedUser.avatar_url || null,
           location,
           farm_size,
           primary_crops,
@@ -105,6 +106,7 @@ router.put('/avatar', authenticateToken, upload.single('file'), async (req, res)
     if (!req.file) return res.status(400).json({ success: false, message: 'An avatar image is required.' });
     validateUpload(req.file);
     const avatarColumn = await getAvatarColumn();
+    const cols = await getUserColumns();
     const users = await query("SELECT " + avatarColumn + ", avatar_cloudinary_public_id, avatar_cloudinary_resource_type FROM users WHERE id = ?", [req.user.id]);
     if (!users.length) return res.status(404).json({ success: false, message: 'User not found.' });
     uploadedAsset = await uploadBuffer({
@@ -113,11 +115,38 @@ router.put('/avatar', authenticateToken, upload.single('file'), async (req, res)
       contentType: req.file.mimetype,
       originalName: req.file.originalname
     });
-    await query("UPDATE users SET " + avatarColumn + " = ?, avatar_cloudinary_public_id = ?, avatar_cloudinary_resource_type = ?, avatar_original_file_name = ?, avatar_mime_type = ?, avatar_file_size = ?, avatar_storage_provider = ? WHERE id = ?", [uploadedAsset.url, uploadedAsset.publicId, uploadedAsset.resourceType, req.file.originalname, req.file.mimetype, req.file.size, 'cloudinary', req.user.id]);
+
+    const setClauses = [`${avatarColumn} = ?`];
+    const setParams = [uploadedAsset.url];
+    if (cols.has('avatar_url') && avatarColumn !== 'avatar_url') {
+      setClauses.push('avatar_url = ?');
+      setParams.push(uploadedAsset.url);
+    }
+    if (cols.has('avatar') && avatarColumn !== 'avatar') {
+      setClauses.push('avatar = ?');
+      setParams.push(uploadedAsset.url);
+    }
+    if (cols.has('avatar_cloudinary_public_id')) { setClauses.push('avatar_cloudinary_public_id = ?'); setParams.push(uploadedAsset.publicId); }
+    if (cols.has('avatar_cloudinary_resource_type')) { setClauses.push('avatar_cloudinary_resource_type = ?'); setParams.push(uploadedAsset.resourceType); }
+    if (cols.has('avatar_original_file_name')) { setClauses.push('avatar_original_file_name = ?'); setParams.push(req.file.originalname); }
+    if (cols.has('avatar_mime_type')) { setClauses.push('avatar_mime_type = ?'); setParams.push(req.file.mimetype); }
+    if (cols.has('avatar_file_size')) { setClauses.push('avatar_file_size = ?'); setParams.push(req.file.size); }
+    if (cols.has('avatar_storage_provider')) { setClauses.push('avatar_storage_provider = ?'); setParams.push(uploadedAsset.provider || 'supabase'); }
+
+    setParams.push(req.user.id);
+    await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, setParams);
+
     if (users[0].avatar_cloudinary_public_id) {
       try { await deleteObject(users[0].avatar_cloudinary_public_id, users[0].avatar_cloudinary_resource_type); } catch (error) { console.error('Previous avatar cleanup failed:', error.message); }
     }
-    return res.json({ success: true, data: { avatar: uploadedAsset.url, avatar_cloudinary_public_id: uploadedAsset.publicId } });
+    return res.json({
+      success: true,
+      data: {
+        avatar: uploadedAsset.url,
+        avatar_url: uploadedAsset.url,
+        avatar_cloudinary_public_id: uploadedAsset.publicId
+      }
+    });
   } catch (error) {
     if (uploadedAsset) {
       try { await deleteObject(uploadedAsset.publicId, uploadedAsset.resourceType); } catch {}
@@ -129,14 +158,66 @@ router.put('/avatar', authenticateToken, upload.single('file'), async (req, res)
 router.delete('/avatar', authenticateToken, async (req, res) => {
   try {
     const avatarColumn = await getAvatarColumn();
+    const cols = await getUserColumns();
     const users = await query("SELECT " + avatarColumn + ", avatar_cloudinary_public_id, avatar_cloudinary_resource_type FROM users WHERE id = ?", [req.user.id]);
     if (!users.length) return res.status(404).json({ success: false, message: 'User not found.' });
-    await query("UPDATE users SET " + avatarColumn + " = NULL, avatar_cloudinary_public_id = NULL, avatar_cloudinary_resource_type = NULL, avatar_original_file_name = NULL, avatar_mime_type = NULL, avatar_file_size = NULL, avatar_storage_provider = NULL WHERE id = ?", [req.user.id]);
-    if (users[0].avatar_cloudinary_public_id) {
-      try { await deleteObject(users[0].avatar_cloudinary_public_id, users[0].avatar_cloudinary_resource_type); } catch (error) { console.error('Avatar cleanup failed:', error.message); }
+
+    const currentUser = users[0];
+    const currentAvatar = currentUser[avatarColumn] || currentUser.avatar || currentUser.avatar_url;
+    let publicId = currentUser.avatar_cloudinary_public_id;
+
+    // If publicId was not saved, try extracting from Supabase URL if it belongs to avatars
+    if (!publicId && currentAvatar && typeof currentAvatar === 'string') {
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'AgriBridge';
+      const marker = `/storage/v1/object/public/${bucket}/`;
+      if (currentAvatar.includes(marker)) {
+        const extracted = decodeURIComponent(currentAvatar.split(marker)[1] || '');
+        if (extracted.startsWith('agribridge/avatars/') || extracted.startsWith('avatars/')) {
+          publicId = extracted;
+        }
+      }
     }
-    return res.json({ success: true, message: 'Avatar removed.' });
+
+    // Safety checks: Enforce that only avatar paths are deleted, NEVER identity/KYC documents
+    if (publicId) {
+      if (publicId.includes('id-proof') || publicId.includes('documents') || publicId.includes('lands')) {
+        return res.status(400).json({ success: false, message: 'Invalid avatar asset identifier.' });
+      }
+      try {
+        await deleteObject(publicId, currentUser.avatar_cloudinary_resource_type || 'image');
+      } catch (storageError) {
+        console.error('Storage deletion failed for avatar:', storageError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to delete photo from storage. Please try again.'
+        });
+      }
+    }
+
+    // Only set columns to NULL in database after storage object is successfully deleted
+    const setClauses = [`${avatarColumn} = NULL`];
+    if (cols.has('avatar_url') && avatarColumn !== 'avatar_url') {
+      setClauses.push('avatar_url = NULL');
+    }
+    if (cols.has('avatar') && avatarColumn !== 'avatar') {
+      setClauses.push('avatar = NULL');
+    }
+    if (cols.has('avatar_cloudinary_public_id')) setClauses.push('avatar_cloudinary_public_id = NULL');
+    if (cols.has('avatar_cloudinary_resource_type')) setClauses.push('avatar_cloudinary_resource_type = NULL');
+    if (cols.has('avatar_original_file_name')) setClauses.push('avatar_original_file_name = NULL');
+    if (cols.has('avatar_mime_type')) setClauses.push('avatar_mime_type = NULL');
+    if (cols.has('avatar_file_size')) setClauses.push('avatar_file_size = NULL');
+    if (cols.has('avatar_storage_provider')) setClauses.push('avatar_storage_provider = NULL');
+
+    await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, [req.user.id]);
+
+    return res.json({
+      success: true,
+      message: 'Avatar removed.',
+      data: { avatar: null, avatar_url: null }
+    });
   } catch (error) {
+    console.error('Avatar delete failed:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });

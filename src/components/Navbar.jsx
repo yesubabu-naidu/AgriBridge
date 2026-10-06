@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { getUserInitial } from '../utils/user';
 
 export default function Navbar({ user, onLogout }) {
   const location = useLocation();
@@ -135,9 +136,14 @@ export default function Navbar({ user, onLogout }) {
                       style={{ width: '28px', height: '28px', objectFit: 'cover' }}
                     />
                   ) : (
-                    <i className="bi bi-person-circle fs-5"></i>
+                    <div
+                      className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center fw-bold"
+                      style={{ width: '28px', height: '28px', fontSize: '13px' }}
+                    >
+                      {getUserInitial(user.full_name)}
+                    </div>
                   )}
-                  <span className="profile-dropdown-label">{user.full_name || user.role}</span>
+                  <span className="profile-dropdown-label">{user.full_name || 'User'}</span>
                 </button>
 
                 {profileOpen && (
@@ -153,6 +159,16 @@ export default function Navbar({ user, onLogout }) {
                         onClick={closeAllMenus}
                       >
                         <i className="bi bi-speedometer2 me-2"></i>My Dashboard
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        className="dropdown-item"
+                        to={`/${user.role}/profile`}
+                        role="menuitem"
+                        onClick={closeAllMenus}
+                      >
+                        <i className="bi bi-person me-2"></i>View Profile
                       </Link>
                     </li>
                     <li>

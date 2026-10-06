@@ -1,11 +1,11 @@
 import express from 'express';
 import { query } from '../config/db.js';
-import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // GET /api/admin/dashboard
-router.get('/dashboard', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.get('/dashboard', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const users = await query('SELECT COUNT(*) AS total FROM users');
     const farmers = await query(`SELECT COUNT(*) AS total FROM users WHERE role = 'farmer'`);
@@ -37,7 +37,7 @@ router.get('/dashboard', authenticateToken, authorizeRoles('admin'), async (req,
 });
 
 // GET /api/admin/users
-router.get('/users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const users = await query(`SELECT id, COALESCE(NULLIF(full_name, ''), email) AS full_name, email, role, phone, status, created_at FROM users ORDER BY created_at DESC`);
     return res.json({ success: true, data: users });
@@ -47,7 +47,7 @@ router.get('/users', authenticateToken, authorizeRoles('admin'), async (req, res
 });
 
 // PUT /api/admin/users/:id/status
-router.put('/users/:id/status', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.put('/users/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const status = String(req.body.status || '').toLowerCase();
     if (!['active', 'blocked'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or blocked.' });
@@ -59,7 +59,7 @@ router.put('/users/:id/status', authenticateToken, authorizeRoles('admin'), asyn
 });
 
 // GET /api/admin/lands
-router.get('/lands', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.get('/lands', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const lands = await query(
       `SELECT l.*, l.land_name, l.acres, l.lease_price, COALESCE(NULLIF(u.full_name, ''), u.email) AS owner_name
@@ -74,7 +74,7 @@ router.get('/lands', authenticateToken, authorizeRoles('admin'), async (req, res
 });
 
 // PUT /api/admin/lands/:id/status
-router.put('/lands/:id/status', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.put('/lands/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const status = String(req.body.status || '').toLowerCase();
     if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive.' });
@@ -86,7 +86,7 @@ router.put('/lands/:id/status', authenticateToken, authorizeRoles('admin'), asyn
 });
 
 // GET /api/admin/transactions
-router.get('/transactions', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+router.get('/transactions', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const txs = await query(
       `SELECT t.*, COALESCE(NULLIF(u.full_name, ''), u.email) AS full_name, u.role

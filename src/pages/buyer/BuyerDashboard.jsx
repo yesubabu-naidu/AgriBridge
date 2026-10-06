@@ -6,10 +6,15 @@ import StatusBadge from '../../components/StatusBadge';
 import DownloadReceiptButton from '../../components/DownloadReceiptButton';
 import { api } from '../../services/api';
 
-export default function BuyerDashboard() {
+export default function BuyerDashboard({ user: propUser }) {
   const [stats, setStats] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const currentUser = propUser || (() => {
+    try { return JSON.parse(localStorage.getItem('agribridge_user') || 'null'); } catch { return null; }
+  })();
+  const displayName = currentUser?.full_name?.trim() || 'User';
 
   useEffect(() => {
     loadDashboard();
@@ -19,7 +24,7 @@ export default function BuyerDashboard() {
     const data = await api.getDashboardStats('buyer');
     const prods = await api.getProducts();
     setStats(data);
-    setProducts(prods.slice(0, 2));
+    setProducts(Array.isArray(prods) ? prods : []);
     setLoading(false);
   };
 
@@ -30,7 +35,7 @@ export default function BuyerDashboard() {
       <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
         <div>
           <span className="eyebrow">BUYER WORKSPACE</span>
-          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Welcome, Buyer! 🌾</h2>
+          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Welcome, {displayName}! 🌾</h2>
           <p className="text-muted small mb-0">Browse farm produce, manage orders, and track deliveries.</p>
         </div>
         <Link to="/buyer/marketplace" className="btn btn-success w-100 w-sm-auto text-center">

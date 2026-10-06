@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { query } from '../config/db.js';
 import { getStoredAssetUrl } from '../services/storageService.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { buildOtpEmail } from '../services/emailService.js';
+import { buildOtpEmail, getUserNameByEmail } from '../services/emailService.js';
 import {
   BCRYPT_ROUNDS,
   getJwtSecret,
@@ -76,17 +76,19 @@ async function deliverCode(email, otp, subject, message) {
     }
   });
 
+  const userName = await getUserNameByEmail(email);
+
   const html = buildOtpEmail({
     code: otp,
     actionType: subject || 'Verification',
-    userName: (email || '').split('@')[0]
+    userName
   });
 
   await transporter.sendMail({
     from: `"AgriBridge Security" <${user}>`,
     to: email,
     subject: subject || 'AgriBridge Security Verification Code',
-    text: `${message} ${otp}. This code expires in 10 minutes.`,
+    text: `Hello ${userName},\n\n${message} ${otp}. This code expires in 10 minutes.`,
     html
   });
 }
@@ -110,23 +112,26 @@ function signToken(user) {
 }
 
 function safeUser(user, profile = {}) {
+  const avatarValue =
+    user.avatar ||
+    (
+      user.avatar_cloudinary_public_id
+        ? getStoredAssetUrl(
+            user.avatar,
+            user.avatar_cloudinary_public_id,
+            user.avatar_cloudinary_resource_type
+          )
+        : user.avatar_url
+    ) || null;
+
   return {
     id: user.id,
-    full_name: user.full_name || user.name,
+    full_name: user.full_name || user.name || 'User',
     email: user.email,
     role: user.role,
-    phone: user.phone,
-    avatar:
-      user.avatar ||
-      (
-        user.avatar_cloudinary_public_id
-          ? getStoredAssetUrl(
-              user.avatar,
-              user.avatar_cloudinary_public_id,
-              user.avatar_cloudinary_resource_type
-            )
-          : user.avatar_url
-      ),
+    phone: user.phone || '',
+    avatar: avatarValue,
+    avatar_url: avatarValue,
     ...profile
   };
 }

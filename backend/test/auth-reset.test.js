@@ -18,11 +18,25 @@ function createHarness() {
   return bcrypt.hash(oldPassword, 10).then((hash) => {
     user.password = hash;
     user.password_hash = hash;
+    let verificationCodes = [];
     const dbQuery = async (sql, params = []) => {
       if (sql.includes('information_schema.columns')) return ['name', 'full_name', 'email', 'password', 'password_hash', 'role', 'phone'].map((column_name) => ({ column_name }));
+      if (sql.includes('verification_codes')) {
+        if (sql.trim().startsWith('DELETE FROM verification_codes')) {
+          verificationCodes = verificationCodes.filter(c => !(c.email === params[0] && c.purpose === params[1]));
+          return { affectedRows: 1 };
+        }
+        if (sql.trim().startsWith('INSERT INTO verification_codes')) {
+          verificationCodes.push({ id: verificationCodes.length + 1, email: params[0], purpose: params[1], code_hash: params[2], expires_at: params[3] });
+          return { insertId: verificationCodes.length };
+        }
+        if (sql.includes('SELECT') && sql.includes('FROM verification_codes')) {
+          return verificationCodes.filter(c => c.email === params[0] && c.purpose === params[1]);
+        }
+      }
       if (sql === 'SELECT id FROM users WHERE email = ?') return params[0] === email ? [{ id: user.id }] : [];
       if (sql === 'SELECT * FROM users WHERE email = ?') return params[0] === email ? [{ ...user }] : [];
-      if (sql.startsWith('UPDATE users SET')) {
+      if (sql.includes('UPDATE users')) {
         assert.equal(params.at(-1), user.id);
         user.password = params[0];
         user.password_hash = params[1];

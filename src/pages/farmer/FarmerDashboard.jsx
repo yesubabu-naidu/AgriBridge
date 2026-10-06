@@ -5,11 +5,16 @@ import LandCard from '../../components/LandCard';
 import StatusBadge from '../../components/StatusBadge';
 import { api } from '../../services/api';
 
-export default function FarmerDashboard() {
+export default function FarmerDashboard({ user: propUser }) {
   const [stats, setStats] = useState(null);
   const [recommendedLands, setRecommendedLands] = useState([]);
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
+
+  const currentUser = propUser || (() => {
+    try { return JSON.parse(localStorage.getItem('agribridge_user') || 'null'); } catch { return null; }
+  })();
+  const displayName = currentUser?.full_name?.trim() || 'User';
 
   useEffect(() => {
     if (loadedRef.current) return;
@@ -22,7 +27,7 @@ export default function FarmerDashboard() {
     const lands = await api.getLands();
 
     setStats(data);
-    setRecommendedLands(lands.slice(0, 2));
+    setRecommendedLands(Array.isArray(lands) ? lands : []);
     setLoading(false);
   };
 
@@ -44,7 +49,7 @@ export default function FarmerDashboard() {
           </span>
 
           <h2 className="fw-black mb-1 text-success fs-3 fs-sm-2">
-            Welcome, Farmer! 🌾
+            Welcome, {displayName}! 🌾
           </h2>
 
           <p className="text-muted small mb-0">

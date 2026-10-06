@@ -15,7 +15,7 @@ export async function authenticateToken(req, res, next) {
     }
     // Authorisation must come from the current account record, not a possibly
     // stale role claim embedded in an old token.
-    req.user = { id: account.id, role: account.role, email: account.email };
+    req.user = { id: account.id, role: account.role, email: account.email, full_name: account.full_name || 'User' };
     return next();
   } catch {
     return res.status(403).json({ success: false, message: 'Invalid or expired token.' });
@@ -27,4 +27,14 @@ export function authorizeRoles(...roles) {
     if (!req.user || !roles.includes(req.user.role)) return res.status(403).json({ success: false, message: 'Forbidden.' });
     return next();
   };
+}
+
+export function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Admin access required'
+    });
+  }
+  return next();
 }

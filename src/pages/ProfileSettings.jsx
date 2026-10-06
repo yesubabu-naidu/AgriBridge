@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { getUserInitial } from '../utils/user';
 
 export default function ProfileSettings({ user, onUpdateProfile }) {
   const role = user?.role || 'farmer';
 
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '+91 98765 43210');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [location, setLocation] = useState(user?.location || 'Ongole, Andhra Pradesh');
-  const [avatar, setAvatar] = useState(user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300');
+  const [avatar, setAvatar] = useState(user?.avatar || user?.avatar_url || null);
   const [idProofImg, setIdProofImg] = useState(user?.id_proof_img || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600');
 
   // Role specific fields
@@ -18,7 +19,23 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
   const [shippingAddress, setShippingAddress] = useState(user?.shipping_address || 'Plot 42, Industrial Area, Vijayawada');
 
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletingAvatar, setDeletingAvatar] = useState(false);
   const [successAlert, setSuccessAlert] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
+      setAvatar(user.avatar || user.avatar_url || null);
+      if (user.location) setLocation(user.location);
+      if (user.farm_size) setFarmSize(user.farm_size);
+      if (user.primary_crops) setPrimaryCrops(user.primary_crops);
+      if (user.company_name) setCompanyName(user.company_name);
+      if (user.shipping_address) setShippingAddress(user.shipping_address);
+    }
+  }, [user]);
 
   if (!user) {
     return <div className="container py-5 text-center"><p>Please login to access profile settings.</p></div>;
@@ -31,13 +48,46 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
       window.alert("Please choose an image up to 10 MB.");
       return;
     }
-    setAvatar(URL.createObjectURL(file));
-    const response = await api.uploadAvatar(file);
-    if (response?.data?.avatar) {
-      setAvatar(response.data.avatar);
-      if (onUpdateProfile) onUpdateProfile({ ...user, avatar: response.data.avatar });
-    } else if (!response?.isMock) {
-      window.alert(response?.message || "Avatar upload failed.");
+    setUploadingAvatar(true);
+    try {
+      const response = await api.uploadAvatar(file);
+      const newAvatar = response?.data?.avatar || response?.data?.avatar_url;
+      if (newAvatar) {
+        setAvatar(newAvatar);
+        const updatedUser = { ...user, avatar: newAvatar, avatar_url: newAvatar };
+        localStorage.setItem("agribridge_user", JSON.stringify(updatedUser));
+        if (onUpdateProfile) onUpdateProfile(updatedUser);
+      } else if (!response?.isMock) {
+        window.alert(response?.message || "Avatar upload failed.");
+      }
+    } catch (err) {
+      window.alert(err.message || "Avatar upload failed.");
+    } finally {
+      setUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    if (!avatar) return;
+    if (!window.confirm("Are you sure you want to delete your profile photo?")) {
+      return;
+    }
+    setDeletingAvatar(true);
+    try {
+      const response = await api.deleteAvatar();
+      if (response?.success) {
+        setAvatar(null);
+        const updatedUser = { ...user, avatar: null, avatar_url: null };
+        localStorage.setItem("agribridge_user", JSON.stringify(updatedUser));
+        if (onUpdateProfile) onUpdateProfile(updatedUser);
+      } else {
+        window.alert(response?.message || "Failed to delete profile photo.");
+      }
+    } catch (err) {
+      window.alert(err.message || "Failed to delete profile photo.");
+    } finally {
+      setDeletingAvatar(false);
     }
   };
 
@@ -64,7 +114,8 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
       email: email.trim().toLowerCase(),
       phone: phone.trim(),
       location: location.trim(),
-      avatar,
+      avatar: avatar || null,
+      avatar_url: avatar || null,
       id_proof_img: idProofImg,
       farm_size: farmSize,
       primary_crops: primaryCrops,
@@ -110,13 +161,22 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
               {/* Profile Avatar Upload */}
               <div className="col-md-6">
                 <div className="d-flex align-items-center gap-4">
-                  <div className="position-relative">
-                    <img 
-                      src={avatar} 
-                      alt="Avatar" 
-                      className="rounded-circle border border-3 border-success shadow-sm"
-                      style={{ width: '100px', height: '100px', objectFit: 'cover' }}
-                    />
+                  <div className="position-relative flex-shrink-0">
+                    {avatar ? (
+                      <img 
+                        src={avatar} 
+                        alt="Avatar" 
+                        className="rounded-circle border border-3 border-success shadow-sm"
+                        style={{ width: '100px', height: '100px', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div 
+                        className="rounded-circle border border-3 border-success shadow-sm bg-success text-white d-flex align-items-center justify-content-center fw-bold fs-1"
+                        style={{ width: '100px', height: '100px' }}
+                      >
+                        {getUserInitial(fullName || user.full_name)}
+                      </div>
+                    )}
                     <label 
                       htmlFor="avatar-upload" 
                       className="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-2 shadow cursor-pointer d-flex align-items-center justify-content-center"
@@ -131,15 +191,26 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
                       accept="image/*" 
                       className="d-none"
                       onChange={handleAvatarFileUpload}
+                      disabled={uploadingAvatar || deletingAvatar}
                     />
                   </div>
                   <div>
-                    <h6 className="fw-bold mb-1">{fullName || user.full_name}</h6>
+                    <h6 className="fw-bold mb-1">{fullName || user.full_name || 'User'}</h6>
                     <span className="badge bg-success-subtle text-success text-capitalize mb-2">{role}</span>
-                    <div className="d-flex gap-2">
-                      <label htmlFor="avatar-upload" className="btn btn-sm btn-outline-success">
-                        <i className="bi bi-upload me-1"></i> Upload Photo
+                    <div className="d-flex flex-wrap gap-2">
+                      <label htmlFor="avatar-upload" className={`btn btn-sm btn-outline-success ${uploadingAvatar ? 'disabled' : ''}`}>
+                        <i className="bi bi-upload me-1"></i> {uploadingAvatar ? 'Uploading photo...' : 'Upload Photo'}
                       </label>
+                      {avatar && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={handleDeleteAvatar}
+                          disabled={deletingAvatar || uploadingAvatar}
+                        >
+                          <i className="bi bi-trash me-1"></i> {deletingAvatar ? 'Deleting photo...' : 'Delete Photo'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

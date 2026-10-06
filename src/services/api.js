@@ -651,11 +651,65 @@ export const api = {
 
     const response = await fetchWithFallback("/profile/avatar", { method: "PUT", body: buildFileFormData({ file }) }, null);
 
-    if (response?.data?.avatar) {
+    const newAvatar = response?.data?.avatar || response?.data?.avatar_url;
+
+    if (newAvatar) {
 
       const current = getCurrentUser();
 
-      localStorage.setItem("agribridge_user", JSON.stringify({ ...current, avatar: response.data.avatar }));
+      if (current) {
+
+        const updated = { ...current, avatar: newAvatar, avatar_url: newAvatar };
+
+        localStorage.setItem("agribridge_user", JSON.stringify(updated));
+
+        usersStore = getStoredItem("agribridge_users", []);
+
+        const index = usersStore.findIndex(item => String(item.id) === String(current.id));
+
+        if (index >= 0) {
+
+          usersStore[index] = { ...usersStore[index], avatar: newAvatar, avatar_url: newAvatar };
+
+          setStoredItem("agribridge_users", usersStore);
+
+        }
+
+      }
+
+    }
+
+    return response;
+
+  },
+
+  async deleteAvatar() {
+
+    const response = await fetchWithFallback("/profile/avatar", { method: "DELETE" }, null);
+
+    if (response?.success) {
+
+      const current = getCurrentUser();
+
+      if (current) {
+
+        const updated = { ...current, avatar: null, avatar_url: null };
+
+        localStorage.setItem("agribridge_user", JSON.stringify(updated));
+
+        usersStore = getStoredItem("agribridge_users", []);
+
+        const index = usersStore.findIndex(item => String(item.id) === String(current.id));
+
+        if (index >= 0) {
+
+          usersStore[index] = { ...usersStore[index], avatar: null, avatar_url: null };
+
+          setStoredItem("agribridge_users", usersStore);
+
+        }
+
+      }
 
     }
 

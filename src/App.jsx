@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
+import { getUserInitial } from './utils/user';
 
 // Layout & Core Components
 import Navbar from './components/Navbar';
@@ -64,11 +65,34 @@ export default function App() {
   });
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef(null);
 
-  // Any route change closes the mobile drawer so it can never sit above a new page.
+  // Any route change closes the mobile drawer and profile dropdown so it can never sit above a new page.
   useEffect(() => {
     setMobileSidebarOpen(false);
+    setProfileDropdownOpen(false);
   }, [location.pathname]);
+
+  // Click outside and Escape key handlers for top-right profile dropdown
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     if (!mobileSidebarOpen) {
@@ -185,18 +209,86 @@ export default function App() {
               </div>
 
               <div className="d-flex align-items-center gap-3">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold overflow-hidden" style={{ width: '36px', height: '36px' }}>
-                    {user && user.avatar ? (
-                      <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      user && user.full_name ? user.full_name.charAt(0) : 'U'
-                    )}
-                  </div>
-                  <div className="d-none d-md-block text-start">
-                    <div className="fw-bold small lh-1">{user ? user.full_name : ''}</div>
-                    <small className="text-muted extra-small text-capitalize">{user ? user.role : ''}</small>
-                  </div>
+                <div className="position-relative" ref={profileDropdownRef}>
+                  <button
+                    type="button"
+                    className="btn p-1 border-0 bg-transparent d-flex align-items-center gap-2 text-decoration-none shadow-none text-dark"
+                    onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                    aria-expanded={profileDropdownOpen}
+                    aria-haspopup="true"
+                    title="User Profile Menu"
+                  >
+                    <div className="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold overflow-hidden shadow-sm flex-shrink-0" style={{ width: '38px', height: '38px' }}>
+                      {user && user.avatar ? (
+                        <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        getUserInitial(user ? user.full_name : '')
+                      )}
+                    </div>
+                    <div className="d-none d-md-block text-start">
+                      <div className="fw-bold small lh-1 text-dark">{user ? user.full_name : 'User'}</div>
+                      <small className="text-muted extra-small text-capitalize">{user ? user.role : ''}</small>
+                    </div>
+                    <i className={`bi bi-chevron-${profileDropdownOpen ? 'up' : 'down'} text-muted extra-small ms-1 d-none d-sm-inline`}></i>
+                  </button>
+
+                  {profileDropdownOpen && (
+                    <div
+                      className="dropdown-menu dropdown-menu-end show shadow-lg border-0 rounded-4 p-2 animate-scale-in"
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        marginTop: '8px',
+                        minWidth: '230px',
+                        zIndex: 1050
+                      }}
+                      role="menu"
+                    >
+                      <div className="px-3 py-2 border-bottom mb-1 bg-light rounded-3">
+                        <div className="fw-bold text-dark text-truncate d-flex align-items-center gap-2">
+                          <i className="bi bi-person-circle text-success"></i>
+                          <span className="text-truncate">{user ? user.full_name : 'User'}</span>
+                        </div>
+                        <small className="text-muted text-capitalize ps-4 d-block">{user ? user.role : 'User'}</small>
+                      </div>
+
+                      <Link
+                        to={`/${user ? user.role : 'farmer'}/profile`}
+                        className="dropdown-item py-2 px-3 rounded-3 d-flex align-items-center gap-2"
+                        role="menuitem"
+                        onClick={() => setProfileDropdownOpen(false)}
+                      >
+                        <i className="bi bi-person text-success"></i>
+                        <span>View Profile</span>
+                      </Link>
+
+                      <Link
+                        to={`/${user ? user.role : 'farmer'}/profile`}
+                        className="dropdown-item py-2 px-3 rounded-3 d-flex align-items-center gap-2"
+                        role="menuitem"
+                        onClick={() => setProfileDropdownOpen(false)}
+                      >
+                        <i className="bi bi-gear text-secondary"></i>
+                        <span>Profile Settings</span>
+                      </Link>
+
+                      <hr className="dropdown-divider my-1" />
+
+                      <button
+                        type="button"
+                        className="dropdown-item py-2 px-3 rounded-3 d-flex align-items-center gap-2 text-danger"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          handleLogout();
+                        }}
+                      >
+                        <i className="bi bi-box-arrow-right"></i>
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </header>
@@ -204,7 +296,7 @@ export default function App() {
             <main className="dash-content flex-grow-1">
               <Routes>
                 {/* Landowner Routes */}
-                <Route path="/landowner/dashboard" element={<LandownerDashboard />} />
+                <Route path="/landowner/dashboard" element={<LandownerDashboard user={user} />} />
                 <Route path="/landowner/my-lands" element={<MyLands />} />
                 <Route path="/landowner/add-land" element={<AddLand />} />
                 <Route path="/landowner/my-lands/:id/edit" element={<EditLand />} />
@@ -213,7 +305,7 @@ export default function App() {
                 <Route path="/landowner/profile" element={<ProfileSettings user={user} onUpdateProfile={handleLogin} />} />
 
                 {/* Farmer Routes */}
-                <Route path="/farmer/dashboard" element={<FarmerDashboard />} />
+                <Route path="/farmer/dashboard" element={<FarmerDashboard user={user} />} />
                 <Route path="/farmer/irrigation" element={<SmartIrrigation />} />
                 <Route path="/farmer/my-crops" element={<MyCrops />} />
                 <Route path="/farmer/add-crop" element={<AddCrop />} />
@@ -229,7 +321,7 @@ export default function App() {
                 <Route path="/land/:id" element={<LandDetails user={user} />} />
 
                 {/* Buyer Routes */}
-                <Route path="/buyer/dashboard" element={<BuyerDashboard />} />
+                <Route path="/buyer/dashboard" element={<BuyerDashboard user={user} />} />
                 <Route path="/buyer/marketplace" element={<BuyerMarketplace />} />
                 <Route path="/buyer/cart" element={<Cart />} />
                 <Route path="/buyer/checkout" element={<Checkout />} />
@@ -239,14 +331,14 @@ export default function App() {
                 <Route path="/buyer/profile" element={<ProfileSettings user={user} onUpdateProfile={handleLogin} />} />
 
                 {/* Admin Routes */}
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/users" element={<UserManagement />} />
-                <Route path="/admin/lands" element={<LandModeration />} />
-                <Route path="/admin/transactions" element={<AdminTransactions />} />
-                <Route path="/admin/profile" element={<ProfileSettings user={user} onUpdateProfile={handleLogin} />} />
+                <Route path="/admin/dashboard" element={user?.role === 'admin' ? <AdminDashboard user={user} /> : <Navigate to={`/${user?.role || ''}/dashboard`} replace />} />
+                <Route path="/admin/users" element={user?.role === 'admin' ? <UserManagement /> : <Navigate to={`/${user?.role || ''}/dashboard`} replace />} />
+                <Route path="/admin/lands" element={user?.role === 'admin' ? <LandModeration /> : <Navigate to={`/${user?.role || ''}/dashboard`} replace />} />
+                <Route path="/admin/transactions" element={user?.role === 'admin' ? <AdminTransactions /> : <Navigate to={`/${user?.role || ''}/dashboard`} replace />} />
+                <Route path="/admin/profile" element={user?.role === 'admin' ? <ProfileSettings user={user} onUpdateProfile={handleLogin} /> : <Navigate to={`/${user?.role || ''}/dashboard`} replace />} />
 
                 {/* Fallback inside Dashboard */}
-                <Route path="*" element={<FarmerDashboard />} />
+                <Route path="*" element={<Navigate to={`/${user?.role || 'farmer'}/dashboard`} replace />} />
               </Routes>
             </main>
 

@@ -4,9 +4,14 @@ import StatCard from '../../components/StatCard';
 import StatusBadge from '../../components/StatusBadge';
 import { api } from '../../services/api';
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ user: propUser }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const currentUser = propUser || (() => {
+    try { return JSON.parse(localStorage.getItem('agribridge_user') || 'null'); } catch { return null; }
+  })();
+  const displayName = currentUser?.full_name?.trim() || 'User';
 
   useEffect(() => {
     loadDashboard();
@@ -25,7 +30,7 @@ export default function AdminDashboard() {
       <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
         <div>
           <span className="eyebrow">SYSTEM CONTROL</span>
-          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Admin Operations Center 🛡️</h2>
+          <h2 className="fw-black mb-1 fs-3 fs-sm-2">Welcome, {displayName}! 🛡️</h2>
           <p className="text-muted small mb-0">Monitor platform-wide users, land moderation, transactions, and system health.</p>
         </div>
       </div>
