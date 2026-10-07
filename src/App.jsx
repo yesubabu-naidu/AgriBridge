@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
-import { getUserInitial } from './utils/user';
+import { getUserInitial, hasValidAvatar } from './utils/user';
 
 // Layout & Core Components
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import MobileNav from './components/MobileNav';
 import Footer from './components/Footer';
+import UserAvatar from './components/UserAvatar';
+import LogoutConfirmModal from './components/LogoutConfirmModal';
+
 
 // Public Pages
 import Home from './pages/Home';
@@ -60,12 +63,25 @@ export default function App() {
 
   // User State (null by default when website is opened)
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('agribridge_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('agribridge_user');
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.avatar && !hasValidAvatar(parsed.avatar)) {
+        parsed.avatar = null;
+      }
+      if (parsed && parsed.avatar_url && !hasValidAvatar(parsed.avatar_url)) {
+        parsed.avatar_url = null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
   });
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const profileDropdownRef = useRef(null);
 
   // Any route change closes the mobile drawer and profile dropdown so it can never sit above a new page.
@@ -112,16 +128,35 @@ export default function App() {
   }, [mobileSidebarOpen]);
 
   const handleLogin = (userData) => {
-    setUser(userData);
-    localStorage.setItem('agribridge_user', JSON.stringify(userData));
+    const cleanUser = { ...userData };
+    if (cleanUser.avatar && !hasValidAvatar(cleanUser.avatar)) {
+      cleanUser.avatar = null;
+    }
+    if (cleanUser.avatar_url && !hasValidAvatar(cleanUser.avatar_url)) {
+      cleanUser.avatar_url = null;
+    }
+    setUser(cleanUser);
+    localStorage.setItem('agribridge_user', JSON.stringify(cleanUser));
   };
 
-  const handleLogout = () => {
+  const handleRequestLogout = () => {
+    setProfileDropdownOpen(false);
+    setMobileSidebarOpen(false);
+    setShowLogoutModal(true);
+  };
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
     setUser(null);
     localStorage.removeItem('agribridge_user');
     localStorage.removeItem('agribridge_token');
     navigate('/');
   };
+
 
   // Check if current route is inside a Dashboard role path or logged-in workspace
   const isDashboardRoute = user && (
@@ -191,7 +226,7 @@ export default function App() {
             items={getSidebarMenuItems()}
             isOpen={mobileSidebarOpen}
             onClose={() => setMobileSidebarOpen(false)}
-            onLogout={handleLogout}
+            onLogout={handleRequestLogout}
           />
 
           <div className="dash-main d-flex flex-column min-vh-100">
@@ -218,13 +253,7 @@ export default function App() {
                     aria-haspopup="true"
                     title="User Profile Menu"
                   >
-                    <div className="bg-success text-white rounded-circle d-flex align-items-center justify-content-center fw-bold overflow-hidden shadow-sm flex-shrink-0" style={{ width: '38px', height: '38px' }}>
-                      {user && user.avatar ? (
-                        <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        getUserInitial(user ? user.full_name : '')
-                      )}
-                    </div>
+                    <UserAvatar user={user} size={38} className="shadow-sm" />
                     <div className="d-none d-md-block text-start">
                       <div className="fw-bold small lh-1 text-dark">{user ? user.full_name : 'User'}</div>
                       <small className="text-muted extra-small text-capitalize">{user ? user.role : ''}</small>
@@ -279,10 +308,7 @@ export default function App() {
                         type="button"
                         className="dropdown-item py-2 px-3 rounded-3 d-flex align-items-center gap-2 text-danger"
                         role="menuitem"
-                        onClick={() => {
-                          setProfileDropdownOpen(false);
-                          handleLogout();
-                        }}
+                        onClick={handleRequestLogout}
                       >
                         <i className="bi bi-box-arrow-right"></i>
                         <span>Logout</span>
@@ -349,7 +375,7 @@ export default function App() {
       ) : (
         /* Public Layout with Top Navbar & Footer */
         <>
-          <Navbar user={user} onLogout={handleLogout} />
+          <Navbar user={user} onLogout={handleRequestLogout} />
           <main className="flex-grow-1">
             <Routes>
               <Route path="/" element={user ? <Navigate to={`/${user.role}/dashboard`} replace /> : <Home />} />
@@ -367,6 +393,13 @@ export default function App() {
           <Footer />
         </>
       )}
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onClose={handleCancelLogout}
+        onConfirm={handleConfirmLogout}
+      />
     </div>
   );
 }

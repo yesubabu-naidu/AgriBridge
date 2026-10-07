@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { getUserInitial } from '../utils/user';
+import { getUserInitial, hasValidAvatar } from '../utils/user';
+import UserAvatar from '../components/UserAvatar';
 
 export default function ProfileSettings({ user, onUpdateProfile }) {
   const role = user?.role || 'farmer';
@@ -9,7 +10,8 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [location, setLocation] = useState(user?.location || 'Ongole, Andhra Pradesh');
-  const [avatar, setAvatar] = useState(user?.avatar || user?.avatar_url || null);
+  const rawInitialAvatar = user?.avatar || user?.avatar_url || null;
+  const [avatar, setAvatar] = useState(hasValidAvatar(rawInitialAvatar) ? rawInitialAvatar : null);
   const [idProofImg, setIdProofImg] = useState(user?.id_proof_img || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600');
 
   // Role specific fields
@@ -28,7 +30,8 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
       setFullName(user.full_name || '');
       setEmail(user.email || '');
       setPhone(user.phone || '');
-      setAvatar(user.avatar || user.avatar_url || null);
+      const rawAvatar = user.avatar || user.avatar_url || null;
+      setAvatar(hasValidAvatar(rawAvatar) ? rawAvatar : null);
       if (user.location) setLocation(user.location);
       if (user.farm_size) setFarmSize(user.farm_size);
       if (user.primary_crops) setPrimaryCrops(user.primary_crops);
@@ -36,6 +39,7 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
       if (user.shipping_address) setShippingAddress(user.shipping_address);
     }
   }, [user]);
+
 
   if (!user) {
     return <div className="container py-5 text-center"><p>Please login to access profile settings.</p></div>;
@@ -162,21 +166,13 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
               <div className="col-md-6">
                 <div className="d-flex align-items-center gap-4">
                   <div className="position-relative flex-shrink-0">
-                    {avatar ? (
-                      <img 
-                        src={avatar} 
-                        alt="Avatar" 
-                        className="rounded-circle border border-3 border-success shadow-sm"
-                        style={{ width: '100px', height: '100px', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div 
-                        className="rounded-circle border border-3 border-success shadow-sm bg-success text-white d-flex align-items-center justify-content-center fw-bold fs-1"
-                        style={{ width: '100px', height: '100px' }}
-                      >
-                        {getUserInitial(fullName || user.full_name)}
-                      </div>
-                    )}
+                    <UserAvatar
+                      user={{ ...user, full_name: fullName || user.full_name }}
+                      avatar={avatar}
+                      size={100}
+                      fontSize="2.5rem"
+                      className="border border-3 border-success shadow-sm"
+                    />
                     <label 
                       htmlFor="avatar-upload" 
                       className="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-2 shadow cursor-pointer d-flex align-items-center justify-content-center"
@@ -201,7 +197,7 @@ export default function ProfileSettings({ user, onUpdateProfile }) {
                       <label htmlFor="avatar-upload" className={`btn btn-sm btn-outline-success ${uploadingAvatar ? 'disabled' : ''}`}>
                         <i className="bi bi-upload me-1"></i> {uploadingAvatar ? 'Uploading photo...' : 'Upload Photo'}
                       </label>
-                      {avatar && (
+                      {hasValidAvatar(avatar) && (
                         <button
                           type="button"
                           className="btn btn-sm btn-outline-danger"

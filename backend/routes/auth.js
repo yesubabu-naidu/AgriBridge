@@ -112,7 +112,7 @@ function signToken(user) {
 }
 
 function safeUser(user, profile = {}) {
-  const avatarValue =
+  let avatarValue =
     user.avatar ||
     (
       user.avatar_cloudinary_public_id
@@ -123,6 +123,26 @@ function safeUser(user, profile = {}) {
           )
         : user.avatar_url
     ) || null;
+
+  if (avatarValue && typeof avatarValue === 'string') {
+    const trimmed = avatarValue.trim().toLowerCase();
+    if (
+      trimmed.includes('images.unsplash.com/photo-1534528741775') ||
+      trimmed.includes('images.unsplash.com/photo-1507003211169') ||
+      trimmed.includes('images.unsplash.com/photo-150064876779') ||
+      trimmed.includes('images.unsplash.com/photo-1472099645785') ||
+      trimmed.includes('unsplash.com') ||
+      trimmed.includes('default-user') ||
+      trimmed.includes('default_user') ||
+      trimmed.includes('default-avatar') ||
+      trimmed.includes('default_avatar') ||
+      trimmed.includes('avatar-placeholder') ||
+      trimmed.includes('avatar_placeholder') ||
+      trimmed.includes('placeholder')
+    ) {
+      avatarValue = null;
+    }
+  }
 
   return {
     id: user.id,

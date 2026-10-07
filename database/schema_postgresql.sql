@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   password VARCHAR(255),
   role VARCHAR(20) NOT NULL CHECK (role IN ('farmer', 'buyer', 'landowner', 'admin')),
   phone VARCHAR(20),
-  avatar VARCHAR(255) DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+  avatar VARCHAR(255) DEFAULT NULL,
   status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending')),
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,

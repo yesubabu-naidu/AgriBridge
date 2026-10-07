@@ -867,3 +867,134 @@ img, video, canvas, svg {
     padding-bottom: 32px;
   }
 }
+
+/* ==========================================================================
+   AgriBridge Logout Confirmation Modal
+   ========================================================================== */
+
+.logout-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 1rem;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: abFadeIn 0.2s ease-out forwards;
+}
+
+.logout-modal-card {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 380px;
+  padding: 1.75rem 1.5rem 1.5rem;
+  animation: abScaleIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  text-align: center;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  margin: auto;
+}
+
+.logout-modal-icon-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: #fee2e2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  margin: 0 auto 1rem;
+}
+
+.logout-modal-title {
+  font-family: var(--font-heading, 'Poppins', sans-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #172018;
+  margin-bottom: 0.5rem;
+}
+
+.logout-modal-message {
+  font-size: 0.95rem;
+  color: #556256;
+  margin-bottom: 1.5rem;
+  line-height: 1.45;
+}
+
+.logout-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.logout-btn-cancel,
+.logout-btn-confirm {
+  flex: 1 1 0;
+  min-width: 110px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+  text-decoration: none;
+}
+
+/* CANCEL BUTTON: AgriBridge green theme, darker on hover, safe action */
+.logout-btn-cancel {
+  background-color: var(--primary, #2E7D32) !important;
+  border-color: var(--primary, #2E7D32) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.25);
+}
+
+.logout-btn-cancel:hover,
+.logout-btn-cancel:focus-visible {
+  background-color: var(--primary-dark, #1B5E20) !important;
+  border-color: var(--primary-dark, #1B5E20) !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(27, 94, 32, 0.35);
+  transform: translateY(-1px);
+}
+
+.logout-btn-cancel:active {
+  transform: translateY(0);
+}
+
+/* LOGOUT BUTTON: Red background, white text, darker on hover, destructive action */
+.logout-btn-confirm {
+  background-color: var(--danger, #D32F2F) !important;
+  border-color: var(--danger, #D32F2F) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(211, 47, 47, 0.25);
+}
+
+.logout-btn-confirm:hover,
+.logout-btn-confirm:focus-visible {
+  background-color: #B71C1C !important;
+  border-color: #B71C1C !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(183, 28, 28, 0.35);
+  transform: translateY(-1px);
+}
+
+.logout-btn-confirm:active {
+  transform: translateY(0);
+}

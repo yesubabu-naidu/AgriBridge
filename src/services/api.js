@@ -493,7 +493,7 @@ export const api = {
 
         role: role,
 
-        avatar: avatar || 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+        avatar: avatar || null,
 
         phone: '+91 98765 00000',
 
